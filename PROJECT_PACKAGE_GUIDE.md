@@ -115,7 +115,7 @@ npm run generate:page -- --project sample-project --client admin --path example-
 
 - `docs.enabled=true` 时，文档中心按项目扫描 `docs.root`。
 - 新项目应将文档放在项目包自己的 `docs` 目录。
-- 过渡期项目可以暂时引用工程外的既有 PRD 目录，但迁移完成后应收回项目包。
+- 文档必须放在项目包自己的 `docs` 目录，工程不再支持读取项目包外的 PRD 路径。
 - `mobile.enabled=true` 时，`mobile.entry` 必须指向项目包内的 HTML。
 
 ## 8. 开发模式与 PRD 对照
