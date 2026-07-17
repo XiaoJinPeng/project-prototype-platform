@@ -1,0 +1,66 @@
+:root {
+  /* Platform defaults stay product-neutral; project packages may override them. */
+  --app-color-primary: #2563eb;
+  --app-color-primary-rgb: 37 99 235;
+  --app-color-primary-hover: #1d4ed8;
+  --app-color-primary-active: #1e40af;
+  --app-color-success: #16a34a;
+  --app-color-warning: #f59e0b;
+  --app-color-danger: #dc2626;
+  --app-color-info: #64748b;
+  --app-color-primary-soft: color-mix(in srgb, var(--app-color-primary) 10%, white);
+  --app-color-success-soft: color-mix(in srgb, var(--app-color-success) 10%, white);
+  --app-color-warning-soft: color-mix(in srgb, var(--app-color-warning) 14%, white);
+  --app-color-danger-soft: color-mix(in srgb, var(--app-color-danger) 10%, white);
+  --app-color-info-soft: color-mix(in srgb, var(--app-color-info) 9%, white);
+  --app-color-primary-border: color-mix(in srgb, var(--app-color-primary) 25%, white);
+  --app-color-success-border: color-mix(in srgb, var(--app-color-success) 25%, white);
+  --app-color-warning-border: color-mix(in srgb, var(--app-color-warning) 32%, white);
+  --app-color-danger-border: color-mix(in srgb, var(--app-color-danger) 25%, white);
+  --app-color-info-border: color-mix(in srgb, var(--app-color-info) 22%, white);
+  --app-color-primary-text: color-mix(in srgb, var(--app-color-primary) 82%, black);
+  --app-color-success-text: color-mix(in srgb, var(--app-color-success) 78%, black);
+  --app-color-warning-text: color-mix(in srgb, var(--app-color-warning) 72%, black);
+  --app-color-danger-text: color-mix(in srgb, var(--app-color-danger) 80%, black);
+  --app-color-info-text: var(--app-color-text-secondary);
+  --app-color-text-primary: #0f172a;
+  --app-color-text-secondary: #475569;
+  --app-color-text-muted: #64748b;
+  --app-color-border: #dbe3ec;
+  --app-color-border-light: #e5e7eb;
+  --app-color-border-subtle: #f3f4f6;
+  --app-color-surface: #ffffff;
+  --app-color-surface-subtle: #f8fafc;
+  --app-color-surface-muted: #f9fafb;
+  --app-color-page: #f5f7fb;
+  --app-font-size-xs: 12px;
+  --app-font-size-sm: 13px;
+  --app-font-size-base: 14px;
+  --app-font-size-md: 16px;
+  --app-font-size-lg: 20px;
+  --app-font-size-page-title: 24px;
+  --app-space-1: 4px;
+  --app-space-2: 8px;
+  --app-space-3: 12px;
+  --app-space-4: 16px;
+  --app-space-5: 20px;
+  --app-space-6: 24px;
+  --app-space-8: 32px;
+  --app-radius-control: 4px;
+  --app-radius-panel: 8px;
+  --app-radius-list-panel: 12px;
+  --app-shadow-panel: 0 1px 3px rgb(15 23 42 / 8%);
+  --app-shadow-float: 0 12px 32px rgb(15 23 42 / 10%);
+  --app-control-height: 36px;
+  --app-table-row-height: 48px;
+  --app-panel-header-height: 52px;
+
+  /* Element Plus follows the same project theme token. */
+  --el-color-primary: var(--app-color-primary);
+  --el-color-primary-light-3: color-mix(in srgb, var(--app-color-primary) 70%, white);
+  --el-color-primary-light-5: color-mix(in srgb, var(--app-color-primary) 50%, white);
+  --el-color-primary-light-7: color-mix(in srgb, var(--app-color-primary) 30%, white);
+  --el-color-primary-light-8: color-mix(in srgb, var(--app-color-primary) 20%, white);
+  --el-color-primary-light-9: color-mix(in srgb, var(--app-color-primary) 10%, white);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--app-color-primary) 80%, black);
+}

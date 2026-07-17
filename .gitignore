@@ -1,0 +1,11 @@
+node_modules/
+.vite/
+dist/
+*.log
+vite.config.js.timestamp-*.mjs
+.DS_Store
+Thumbs.db
+output/playwright/
+exports/
+.page-transfer-work/
+*.local

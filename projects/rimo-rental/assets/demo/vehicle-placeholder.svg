@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560">
+  <rect width="900" height="560" fill="#eef3f6"/>
+  <rect x="48" y="48" width="804" height="464" rx="28" fill="#f8fafc" stroke="#d7e1e8" stroke-width="4"/>
+  <path d="M230 344h440l-35-105c-8-25-32-43-59-43H334c-26 0-50 17-59 42l-45 106Z" fill="#dbeaf1" stroke="#00689e" stroke-width="10"/>
+  <path d="M309 226h282l24 72H282l27-72Z" fill="#b8d9e7"/>
+  <rect x="191" y="321" width="518" height="95" rx="32" fill="#00689e"/>
+  <circle cx="306" cy="416" r="48" fill="#334155" stroke="#fff" stroke-width="14"/>
+  <circle cx="594" cy="416" r="48" fill="#334155" stroke="#fff" stroke-width="14"/>
+  <rect x="415" y="347" width="70" height="25" rx="8" fill="#e8f5fa"/>
+  <text x="450" y="110" fill="#00689e" font-family="Arial, sans-serif" font-size="34" font-weight="700" text-anchor="middle">RIMO DEMO VEHICLE</text>
+</svg>

@@ -1,0 +1,9 @@
+dist
+node_modules
+playwright-report
+test-results
+tests/visual
+public/docs
+src/views/operation
+src/views/enterprise
+src/views/mobile

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "sample-project",
+  "name": "示例项目",
+  "shortName": "示例",
+  "description": "项目原型、产品文档与演示页面。",
+  "version": "0.1.0",
+  "defaultLocale": "zh-CN",
+  "pageDefinitions": "page-definitions.js",
+  "branding": {},
+  "theme": {
+    "primary": "#2563eb",
+    "primaryHover": "#1d4ed8",
+    "primaryActive": "#1e40af",
+    "pageBackground": "#f5f7fb"
+  },
+  "clients": [
+    {
+      "id": "admin",
+      "name": "管理端",
+      "description": "项目管理后台。",
+      "icon": "Management",
+      "defaultPage": "home",
+      "login": {
+        "account": "admin",
+        "tenantCode": "demo"
+      }
+    }
+  ],
+  "entries": [
+    {
+      "id": "admin",
+      "kind": "client",
+      "clientId": "admin",
+      "name": "管理端",
+      "description": "进入项目管理后台。",
+      "icon": "Management",
+      "order": 10
+    },
+    {
+      "id": "docs",
+      "kind": "docs",
+      "name": "产品文档",
+      "description": "阅读项目 PRD 与产品说明。",
+      "icon": "Document",
+      "order": 20
+    }
+  ],
+  "docs": {
+    "enabled": true,
+    "root": "docs"
+  },
+  "mobile": {
+    "enabled": false
+  },
+  "features": {
+    "pageTransfer": true,
+    "designSystem": true
+  }
+}
