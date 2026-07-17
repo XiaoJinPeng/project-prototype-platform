@@ -196,12 +196,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
             >
               动态
             </button>
-            <RouterLink
-              to="/tools/projects"
-              class="flex h-full items-center font-label-md text-label-md text-on-surface-variant transition-colors hover:text-on-surface"
-            >
-              设置
-            </RouterLink>
           </div>
         </div>
         <div class="flex items-center gap-4">
@@ -213,6 +207,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
             控制台
           </RouterLink>
           <RouterLink
+            v-if="showConsole"
             to="/tools/projects"
             class="hidden items-center justify-center rounded-full bg-primary px-4 py-1.5 font-label-md text-label-md text-white transition-opacity hover:opacity-80 active:scale-95 md:flex"
           >
@@ -272,7 +267,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
             </span>
           </div>
         </div>
-        <div class="flex items-center gap-3">
+        <div v-if="showConsole" class="flex items-center gap-3">
           <button
             type="button"
             class="flex items-center gap-2 rounded-lg border border-outline-variant px-4 py-2 font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container"
