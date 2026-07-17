@@ -138,7 +138,7 @@ npm run generate:page -- --project sample-project --client admin --path vehicle-
 
 页面与 PRD 的对应关系保存在各项目包的 `page-prd-links.js`。没有关联 PRD 的页面不会显示入口。开发模式可以在 `/tools/console` 开启，也可以通过业务页面 URL 的 `?__dev=1` 开启当前浏览器会话。
 
-业务页面开发模式状态保存在工程根目录的 `platform-settings.json`，该文件已加入 `.gitignore`，只作为当前服务实例的本地配置。本机通过 Vite 开发服务保存配置，局域网访问者读取同一份配置，刷新后即可看到 PRD 和源文件入口。首页控制台及首页管理工具仍只保存在当前浏览器的 `sessionStorage`，不写入配置文件；`?__dev=1` 仅作为当前浏览器的临时开发模式覆盖，不会修改共享配置。
+业务页面开发模式状态保存在工程根目录的 `platform-settings.json`，该文件已加入 `.gitignore`，只作为当前服务实例的本地配置。本机通过 Vite 开发服务保存配置，局域网访问者读取同一份配置，刷新后即可看到 PRD 和源文件入口。静态生产包只能读取构建时写入的 `platform-settings.json` 快照，不能在线修改；需要修改时应更新配置后重新构建发布。首页控制台及首页管理工具仍只保存在当前浏览器的 `sessionStorage`，不写入配置文件；`?__dev=1` 仅作为当前浏览器的临时开发模式覆盖，不会修改共享配置。
 
 ## 文档中心机制
 

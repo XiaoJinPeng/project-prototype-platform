@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Close,
   Document,
-  FullScreen,
   Link,
   Menu,
   Search,
@@ -60,6 +59,9 @@ const availableDocuments = computed(() => {
   const entries = props.documentPaths.length ? props.documentPaths : [props.documentPath];
   return entries.map(normalizeDocument).filter(Boolean);
 });
+const activeDocument = computed(
+  () => availableDocuments.value.find((document) => document.path === activeDocumentPath.value) || null,
+);
 
 watch(
   availableDocuments,
@@ -119,13 +121,15 @@ function moveSearchMatch(step) {
 <template>
   <section class="prd-review-pane" :class="`prd-review-pane--${layoutMode}`">
     <header class="prd-review-pane__header">
-      <div class="prd-review-pane__identity">
-        <span class="prd-review-pane__eyebrow">
-          <el-icon><Document /></el-icon>
-          PRD
-        </span>
-        <strong>{{ pageTitle }}</strong>
-        <span class="prd-review-pane__path">{{ activeDocumentPath }}</span>
+      <div class="prd-review-pane__leading">
+        <span class="prd-review-pane__document-icon"><el-icon><Document /></el-icon></span>
+        <div class="prd-review-pane__identity">
+          <span class="prd-review-pane__eyebrow">PRD REVIEW</span>
+          <strong>{{ pageTitle }}</strong>
+          <span class="prd-review-pane__path" :title="activeDocumentPath">
+            {{ activeDocument?.title || activeDocumentPath }}
+          </span>
+        </div>
       </div>
       <div class="prd-review-pane__actions">
         <button
@@ -150,33 +154,33 @@ function moveSearchMatch(step) {
     </header>
 
     <div class="prd-review-pane__toolbar">
-      <span>查看方式</span>
-      <div class="prd-review-pane__modes" role="group" aria-label="PRD 查看方式">
-        <button
-          v-for="mode in [
-            { value: 'split', label: '固定分屏' },
-            { value: 'overlay', label: '浮层' },
-          ]"
-          :key="mode.value"
-          type="button"
-          :class="{ 'is-active': layoutMode === mode.value }"
-          @click="setLayoutMode(mode.value)"
-        >
-          {{ mode.label }}
-        </button>
+      <div class="prd-review-pane__mode-group">
+        <span>显示方式</span>
+        <div class="prd-review-pane__modes" role="group" aria-label="PRD 查看方式">
+          <button
+            v-for="mode in [
+              { value: 'split', label: '固定分屏' },
+              { value: 'overlay', label: '浮层' },
+            ]"
+            :key="mode.value"
+            type="button"
+            :class="{ 'is-active': layoutMode === mode.value }"
+            :aria-pressed="layoutMode === mode.value"
+            @click="setLayoutMode(mode.value)"
+          >
+            {{ mode.label }}
+          </button>
+        </div>
       </div>
       <button
         type="button"
         class="prd-review-pane__window-action prd-review-pane__directory-action"
         :title="outlineVisible ? '关闭目录' : '查看目录'"
+        :aria-expanded="outlineVisible"
         @click="outlineVisible = !outlineVisible"
       >
         <el-icon><Menu /></el-icon>
         {{ outlineVisible ? '关闭目录' : '查看目录' }}
-      </button>
-      <button type="button" class="prd-review-pane__window-action" @click="openDocumentWindow">
-        <el-icon><FullScreen /></el-icon>
-        新窗口
       </button>
     </div>
 
@@ -209,13 +213,14 @@ function moveSearchMatch(step) {
         ></template>
       </el-input>
       <span v-if="documentSearch" class="prd-review-pane__search-count">
-        {{ searchMatchIndex }}/{{ searchMatchCount }}
+        {{ searchMatchIndex }} / {{ searchMatchCount }}
       </span>
       <button
         type="button"
         class="prd-review-pane__search-action"
         :disabled="!searchMatchCount"
         title="上一个匹配"
+        aria-label="上一个匹配"
         @click="moveSearchMatch(-1)"
       >
         <el-icon><ArrowLeft /></el-icon>
@@ -225,6 +230,7 @@ function moveSearchMatch(step) {
         class="prd-review-pane__search-action"
         :disabled="!searchMatchCount"
         title="下一个匹配"
+        aria-label="下一个匹配"
         @click="moveSearchMatch(1)"
       >
         <el-icon><ArrowRight /></el-icon>
@@ -237,7 +243,7 @@ function moveSearchMatch(step) {
         :project-id="projectId"
         :embedded="true"
         :outline-visible="outlineVisible"
-        :document-path="documentPath"
+        :document-path="activeDocumentPath"
       />
     </div>
   </section>
@@ -464,6 +470,439 @@ function moveSearchMatch(step) {
     inset: 0;
     width: 100%;
     flex-basis: auto;
+  }
+}
+
+/* Apple-inspired PRD reader */
+.prd-review-pane {
+  flex: 0 0 clamp(440px, 44%, 620px);
+  border-left: 0.5px solid rgb(0 0 0 / 12%);
+  background: #f5f5f7;
+  color: #1d1d1f;
+  box-shadow: -10px 0 30px rgb(0 0 0 / 7%);
+}
+
+.prd-review-pane--overlay {
+  inset: 10px 10px 10px auto;
+  width: min(620px, calc(100% - 20px));
+  height: auto;
+  border: 0.5px solid rgb(0 0 0 / 12%);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 22%);
+}
+
+.prd-review-pane__header {
+  min-height: 82px;
+  padding: 15px 16px;
+  border-bottom: 0.5px solid rgb(0 0 0 / 9%);
+  background: rgb(255 255 255 / 92%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.prd-review-pane__leading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.prd-review-pane__document-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #e5f0ff;
+  color: var(--app-color-primary);
+  font-size: 19px;
+}
+
+.prd-review-pane__identity {
+  gap: 3px;
+}
+
+.prd-review-pane__eyebrow {
+  color: #6e6e73;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.prd-review-pane__identity strong {
+  color: #1d1d1f;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+}
+
+.prd-review-pane__path {
+  color: #86868b;
+  font-size: 11px;
+}
+
+.prd-review-pane__actions {
+  gap: 6px;
+}
+
+.prd-review-pane__icon-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #6e6e73;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.prd-review-pane__icon-button:hover {
+  background: #f2f2f7;
+  color: #1d1d1f;
+}
+
+.prd-review-pane__icon-button:focus-visible,
+.prd-review-pane__window-action:focus-visible,
+.prd-review-pane__modes button:focus-visible,
+.prd-review-pane__search-action:focus-visible {
+  outline: 3px solid rgb(var(--app-color-primary-rgb) / 20%);
+  outline-offset: 2px;
+}
+
+.prd-review-pane__toolbar {
+  min-height: 52px;
+  gap: 12px;
+  padding: 7px 16px;
+  border-bottom: 0.5px solid rgb(0 0 0 / 8%);
+  background: #f5f5f7;
+}
+
+.prd-review-pane__mode-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #6e6e73;
+  font-size: 11px;
+}
+
+.prd-review-pane__modes {
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #e9e9ee;
+}
+
+.prd-review-pane__modes button {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: #6e6e73;
+  font-size: 11px;
+  font-weight: 550;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.prd-review-pane__modes button.is-active {
+  background: #fff;
+  color: #1d1d1f;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 10%);
+}
+
+.prd-review-pane__window-action,
+.prd-review-pane__directory-action {
+  min-height: 32px;
+  margin-left: auto;
+  padding: 0 10px;
+  border-radius: 9px;
+  color: #515154;
+  font-size: 11px;
+  font-weight: 550;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.prd-review-pane__window-action:hover {
+  background: #e9e9ee;
+  color: #1d1d1f;
+}
+
+.prd-review-pane__searchbar {
+  min-height: 56px;
+  gap: 7px;
+  padding: 8px 16px;
+  border-bottom: 0.5px solid rgb(0 0 0 / 8%);
+  background: rgb(255 255 255 / 92%);
+}
+
+.prd-review-pane__document-select {
+  flex-basis: 172px;
+}
+
+.prd-review-pane__searchbar :deep(.el-input__wrapper),
+.prd-review-pane__searchbar :deep(.el-select__wrapper) {
+  min-height: 36px;
+  border-radius: 10px;
+  background: #f5f5f7;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 12%) inset;
+}
+
+.prd-review-pane__searchbar :deep(.el-input__wrapper.is-focus),
+.prd-review-pane__searchbar :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 3px rgb(var(--app-color-primary-rgb) / 15%);
+}
+
+.prd-review-pane__search-count {
+  min-width: 34px;
+  color: #86868b;
+  text-align: center;
+}
+
+.prd-review-pane__search-action {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #6e6e73;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.prd-review-pane__search-action:hover:not(:disabled) {
+  color: #1d1d1f;
+  background: #f2f2f7;
+}
+
+.prd-review-pane__reader {
+  background: #f5f5f7;
+}
+
+.prd-review-pane__reader :deep(.docs-page--embedded),
+.prd-review-pane__reader :deep(.docs-reader) {
+  background: #f5f5f7;
+}
+
+.prd-review-pane__reader :deep(.docs-page--embedded .document-shell) {
+  width: calc(100% - 24px);
+  min-height: calc(100% - 24px);
+  margin: 12px;
+  padding: 30px 32px 64px;
+  border: 0.5px solid rgb(0 0 0 / 9%);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 3px 16px rgb(0 0 0 / 5%);
+}
+
+.prd-review-pane__reader :deep(.document-meta) {
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom-color: rgb(0 0 0 / 7%);
+  color: #86868b;
+  font-size: 11px;
+}
+
+.prd-review-pane__reader :deep(.reader-state),
+.prd-review-pane__reader :deep(.document-loading),
+.prd-review-pane__reader :deep(.document-error) {
+  min-height: 260px;
+  margin: 12px;
+  border: 0.5px solid rgb(0 0 0 / 8%);
+  border-radius: 16px;
+  background: #fff;
+  color: #6e6e73;
+}
+
+.prd-review-pane__reader :deep(.reader-state h2) {
+  color: #1d1d1f;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.prd-review-pane__reader :deep(.docs-page--embedded-outline .docs-outline) {
+  inset: 10px 10px 10px auto;
+  width: min(250px, calc(100% - 20px));
+  padding: 18px 14px;
+  border: 0.5px solid rgb(0 0 0 / 10%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.prd-review-pane__reader :deep(.docs-outline strong) {
+  margin: 0 8px 10px;
+  color: #1d1d1f;
+  font-size: 13px;
+}
+
+.prd-review-pane__reader :deep(.docs-outline button) {
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: #6e6e73;
+  line-height: 1.45;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.prd-review-pane__reader :deep(.docs-outline button:hover) {
+  background: #f2f2f7;
+  color: #1d1d1f;
+}
+
+.prd-review-pane__reader :deep(.markdown-body) {
+  color: #3a3a3c;
+  font-size: 14px;
+  line-height: 1.78;
+}
+
+.prd-review-pane__reader :deep(.markdown-body h1) {
+  color: #1d1d1f;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.prd-review-pane__reader :deep(.markdown-body h2) {
+  margin-top: 38px;
+  border-bottom-color: rgb(0 0 0 / 8%);
+  color: #1d1d1f;
+  font-size: 21px;
+  letter-spacing: -0.025em;
+}
+
+.prd-review-pane__reader :deep(.markdown-body h3) {
+  color: #1d1d1f;
+  font-size: 17px;
+  letter-spacing: -0.015em;
+}
+
+.prd-review-pane__reader :deep(.markdown-body blockquote) {
+  border-left-color: var(--app-color-primary);
+  border-radius: 0 10px 10px 0;
+  background: #f5f9ff;
+  color: #515154;
+}
+
+.prd-review-pane__reader :deep(.markdown-body code) {
+  border-radius: 6px;
+  background: #f2f2f7;
+  color: #9c2f2f;
+}
+
+.prd-review-pane__reader :deep(.markdown-body pre),
+.prd-review-pane__reader :deep(.markdown-body .mermaid-diagram) {
+  border-color: rgb(0 0 0 / 9%);
+  border-radius: 12px;
+  background: #f8f8fa;
+}
+
+.prd-review-pane__reader :deep(.markdown-body th) {
+  background: #f5f5f7;
+  color: #3a3a3c;
+}
+
+.prd-review-pane__reader :deep(.markdown-body img) {
+  border-color: rgb(0 0 0 / 9%);
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 6%);
+}
+
+.prd-review-pane__reader :deep(.document-search-hit) {
+  border-radius: 4px;
+  background: #ffe58f;
+}
+
+.prd-review-pane__reader :deep(.docs-reader) {
+  scrollbar-color: rgb(0 0 0 / 22%) transparent;
+  scrollbar-width: thin;
+}
+
+.prd-review-pane__reader :deep(.docs-reader)::-webkit-scrollbar {
+  width: 10px;
+}
+
+.prd-review-pane__reader :deep(.docs-reader)::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 22%);
+  background-clip: padding-box;
+}
+
+@media (max-width: 1100px) {
+  .prd-review-pane {
+    flex-basis: min(48%, 520px);
+  }
+}
+
+@media (max-width: 760px) {
+  .prd-review-pane,
+  .prd-review-pane--overlay {
+    inset: 8px;
+    width: auto;
+    height: auto;
+    flex-basis: auto;
+    border: 0.5px solid rgb(0 0 0 / 12%);
+    border-radius: 16px;
+    box-shadow: 0 18px 56px rgb(0 0 0 / 22%);
+  }
+
+  .prd-review-pane__header {
+    min-height: 74px;
+    padding: 12px;
+  }
+
+  .prd-review-pane__document-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .prd-review-pane__toolbar {
+    flex-wrap: wrap;
+    padding: 7px 12px;
+  }
+
+  .prd-review-pane__searchbar {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
+
+  .prd-review-pane__document-select {
+    flex: 1 0 100%;
+  }
+
+  .prd-review-pane__reader :deep(.docs-page--embedded .document-shell) {
+    width: calc(100% - 16px);
+    min-height: calc(100% - 16px);
+    margin: 8px;
+    padding: 24px 20px 54px;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .prd-review-pane__mode-group > span {
+    display: none;
+  }
+
+  .prd-review-pane__window-action {
+    padding: 0 8px;
+  }
+
+  .prd-review-pane__identity strong {
+    max-width: 190px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prd-review-pane *,
+  .prd-review-pane :deep(*) {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
 </style>

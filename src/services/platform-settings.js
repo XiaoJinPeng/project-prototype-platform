@@ -1,5 +1,11 @@
 import { reactive } from 'vue';
 
+const BASE_URL = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const DEVELOPMENT_SETTINGS_ENDPOINT = '/__platform/settings';
+const STATIC_SETTINGS_ENDPOINT = `${BASE_URL}platform-settings.json`;
+
+export const canPersistPlatformSettings = import.meta.env.DEV;
+
 export const platformSettings = reactive({
   developerMode: false,
   loaded: false,
@@ -18,7 +24,9 @@ export function loadPlatformSettings() {
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
-    const endpoints = ['/__platform/settings', '/platform-settings.json'];
+    const endpoints = import.meta.env.DEV
+      ? [DEVELOPMENT_SETTINGS_ENDPOINT, STATIC_SETTINGS_ENDPOINT]
+      : [STATIC_SETTINGS_ENDPOINT];
     for (const endpoint of endpoints) {
       try {
         const response = await fetch(endpoint, { cache: 'no-store' });
@@ -37,7 +45,11 @@ export function loadPlatformSettings() {
 }
 
 export async function setPlatformDeveloperMode(enabled) {
-  const response = await fetch('/__platform/settings', {
+  if (!canPersistPlatformSettings) {
+    throw new Error('静态部署不支持在线修改共享开发模式，请修改 platform-settings.json 后重新打包。');
+  }
+
+  const response = await fetch(DEVELOPMENT_SETTINGS_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ developerMode: Boolean(enabled) }),

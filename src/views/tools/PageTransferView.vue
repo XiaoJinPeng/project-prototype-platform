@@ -1,31 +1,76 @@
 <template>
   <main class="transfer-page">
-    <header class="transfer-header">
-      <RouterLink class="back-link" to="/">
-        <el-icon><ArrowLeft /></el-icon>
-        返回首页
-      </RouterLink>
-      <div>
-        <p class="eyebrow">ENGINEERING TOOL</p>
-        <h1>页面导入导出</h1>
-        <p class="subtitle">将规范 HTML 原型接入工程，或把已接入页面打包为独立演示包。</p>
+    <header class="transfer-header tool-hero">
+      <div class="tool-hero__main">
+        <RouterLink class="back-link" to="/">
+          <el-icon><ArrowLeft /></el-icon>
+          返回首页
+        </RouterLink>
+        <div class="tool-title-row">
+          <div class="tool-title-icon"><el-icon><Upload /></el-icon></div>
+          <div>
+            <p class="eyebrow">ENGINEERING TOOL</p>
+            <h1>页面导入导出</h1>
+            <p class="subtitle">把规范 HTML 接入工程，或把已登记页面整理为独立演示包。</p>
+          </div>
+        </div>
+      </div>
+      <div class="tool-hero__context">
+        <span class="context-label">当前项目</span>
+        <strong>{{ selectedProject?.name || '未选择项目' }}</strong>
+        <span class="context-note">{{ isLocalRuntime ? '本机开发服务可用' : '需要在开发服务本机打开' }}</span>
       </div>
     </header>
 
-    <el-alert
-      class="boundary-alert"
-      title="导入面向规范 HTML 模板；导出面向客户演示，不将导出的运行包作为 Vue 源码重新导回。"
-      type="info"
-      :closable="false"
-    />
+    <div class="transfer-notices">
+      <el-alert
+        class="boundary-alert"
+        title="导入面向规范 HTML 模板；导出面向客户演示，不将导出的运行包作为 Vue 源码重新导回。"
+        type="info"
+        :closable="false"
+      />
 
-    <el-alert
-      v-if="!isLocalRuntime"
-      class="boundary-alert"
-      title="页面导入导出仅允许在运行开发服务的本机使用。"
-      type="warning"
-      :closable="false"
-    />
+      <el-alert
+        v-if="!isLocalRuntime"
+        class="boundary-alert"
+        title="页面导入导出仅允许在运行开发服务的本机使用。"
+        type="warning"
+        :closable="false"
+      />
+    </div>
+
+    <div class="transfer-mode-switch" role="tablist" aria-label="选择工具模式">
+      <button
+        type="button"
+        class="transfer-mode-option"
+        :class="{ 'is-active': activeTab === 'import' }"
+        role="tab"
+        :aria-selected="activeTab === 'import'"
+        @click="activeTab = 'import'"
+      >
+        <span class="transfer-mode-option__icon"><el-icon><Upload /></el-icon></span>
+        <span class="transfer-mode-option__copy">
+          <strong>导入 HTML 原型</strong>
+          <small>检查模板后登记到项目页面</small>
+        </span>
+        <el-icon class="transfer-mode-option__arrow"><ArrowLeft /></el-icon>
+      </button>
+      <button
+        type="button"
+        class="transfer-mode-option"
+        :class="{ 'is-active': activeTab === 'export' }"
+        role="tab"
+        :aria-selected="activeTab === 'export'"
+        @click="activeTab = 'export'"
+      >
+        <span class="transfer-mode-option__icon"><el-icon><Download /></el-icon></span>
+        <span class="transfer-mode-option__copy">
+          <strong>导出演示包</strong>
+          <small>选择页面生成 HTML 或 ZIP</small>
+        </span>
+        <el-icon class="transfer-mode-option__arrow"><ArrowLeft /></el-icon>
+      </button>
+    </div>
 
     <el-tabs v-model="activeTab" class="transfer-tabs">
       <el-tab-pane label="导入 HTML 原型" name="import">
@@ -547,6 +592,8 @@ async function importSource() {
         confirmButtonText: importMode.value === 'replace' ? '确认替换' : '确认导入',
         cancelButtonText: '取消',
         type: 'warning',
+        customClass: 'apple-confirm-dialog',
+        modalClass: 'apple-tool-overlay',
       },
     );
   } catch {
@@ -620,57 +667,202 @@ function reloadProject() {
 
 <style scoped>
 .transfer-page {
-  width: min(1180px, calc(100% - 64px));
+  width: min(1280px, calc(100% - 64px));
   min-height: 100svh;
   margin: 0 auto;
-  padding: 28px 0 48px;
+  padding: 40px 0 64px;
   color: var(--app-color-text-primary);
 }
 .transfer-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 28px;
+}
+.tool-hero__main {
+  min-width: 0;
+}
+.tool-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.tool-title-icon {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  border-radius: 14px;
+  background: #e5f0ff;
+  color: var(--app-color-primary);
+  font-size: 22px;
+}
+.tool-hero__context {
   display: grid;
-  gap: 18px;
-  margin-bottom: 20px;
+  min-width: 190px;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 0.5px solid rgb(0 0 0 / 8%);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 74%);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 4%);
+}
+.context-label,
+.context-note {
+  color: var(--app-color-text-muted);
+  font-size: 12px;
+}
+.tool-hero__context strong {
+  overflow: hidden;
+  color: var(--app-color-text-primary);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .back-link {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   width: fit-content;
+  padding: 6px 0;
   color: var(--app-color-text-secondary);
   font-size: 13px;
+  transition: color 160ms ease;
 }
 .back-link:hover {
   color: var(--app-color-primary);
 }
 .eyebrow {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   color: var(--app-color-primary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.16em;
 }
 .transfer-header h1 {
   margin: 0;
-  font-size: 28px;
-  line-height: 1.3;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
 }
 .subtitle {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
+  color: var(--app-color-text-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.boundary-alert {
+  margin-bottom: 14px;
+  border-radius: 12px;
+}
+.transfer-notices {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.transfer-notices .boundary-alert {
+  margin-bottom: 0;
+}
+.transfer-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.transfer-mode-option {
+  display: flex;
+  min-width: 0;
+  min-height: 84px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 0.5px solid rgb(0 0 0 / 10%);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--app-color-text-primary);
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.transfer-mode-option:hover {
+  border-color: rgb(var(--app-color-primary-rgb) / 28%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 6%);
+  transform: translateY(-1px);
+}
+.transfer-mode-option:focus-visible {
+  outline: 3px solid rgb(var(--app-color-primary-rgb) / 22%);
+  outline-offset: 2px;
+}
+.transfer-mode-option.is-active {
+  border-color: rgb(var(--app-color-primary-rgb) / 34%);
+  background: #eaf3ff;
+  box-shadow: 0 8px 24px rgb(0 113 227 / 8%);
+}
+.transfer-mode-option__icon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: #f2f2f7;
+  color: var(--app-color-primary);
+  font-size: 18px;
+}
+.transfer-mode-option.is-active .transfer-mode-option__icon {
+  background: #d7e9ff;
+}
+.transfer-mode-option__copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.transfer-mode-option__copy strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.transfer-mode-option__copy small {
+  overflow: hidden;
+  color: var(--app-color-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.transfer-mode-option__arrow {
+  margin-left: auto;
+  color: var(--app-color-text-muted);
+  transform: rotate(180deg);
+}
+.transfer-tabs :deep(.el-tabs__header) {
+  display: none;
+}
+.transfer-tabs :deep(.el-tabs__item) {
+  height: 42px;
   color: var(--app-color-text-muted);
   font-size: 14px;
 }
-.boundary-alert {
-  margin-bottom: 20px;
+.transfer-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--app-color-primary);
+  font-weight: 600;
 }
-.transfer-tabs :deep(.el-tabs__header) {
-  margin-bottom: 20px;
+.transfer-tabs :deep(.el-tabs__content) {
+  overflow: visible;
 }
 .tool-panel {
-  padding: 24px;
-  border: 1px solid var(--app-color-border);
-  border-radius: var(--app-radius-panel);
+  padding: 28px;
+  border: 0.5px solid rgb(0 0 0 / 10%);
+  border-radius: 16px;
   background: var(--app-color-surface);
-  box-shadow: var(--app-shadow-panel);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
 }
 .panel-heading,
 .export-toolbar,
@@ -682,7 +874,7 @@ function reloadProject() {
   gap: 16px;
 }
 .panel-heading {
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 .panel-heading-tags {
   display: flex;
@@ -692,23 +884,29 @@ function reloadProject() {
 }
 .panel-heading h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
 }
 .panel-heading p {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   color: var(--app-color-text-muted);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.55;
 }
 .project-target-row {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f5f5f7;
   color: var(--app-color-text-secondary);
   font-size: 13px;
 }
 .project-target-select {
-  width: 240px;
+  width: 260px;
+  margin-left: auto;
 }
 .upload-row {
   display: flex;
@@ -721,10 +919,11 @@ function reloadProject() {
   align-items: center;
   gap: 8px;
   min-width: 300px;
-  height: 36px;
+  height: 44px;
+  flex: 1;
   padding: 0 14px;
   border: 1px dashed var(--app-color-border);
-  border-radius: var(--app-radius-control);
+  border-radius: 10px;
   color: var(--app-color-text-secondary);
   font-size: 13px;
   cursor: pointer;
@@ -746,7 +945,7 @@ function reloadProject() {
   gap: 20px;
   padding: 14px 16px;
   border: 1px solid #b8e1c4;
-  border-radius: 6px;
+  border-radius: 10px;
   color: #166534;
   background: #f0fdf4;
 }
@@ -772,7 +971,7 @@ function reloadProject() {
   gap: 4px;
   margin-top: 12px;
   padding: 10px 12px;
-  border-radius: 4px;
+  border-radius: 10px;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -816,7 +1015,7 @@ function reloadProject() {
   grid-template-columns: 80px minmax(0, 1fr) 80px minmax(0, 1fr) 80px minmax(0, 1fr);
   gap: 8px 12px;
   padding: 12px 14px;
-  border-radius: 4px;
+  border-radius: 10px;
   background: var(--app-color-surface-muted);
   font-size: 12px;
 }
@@ -840,8 +1039,10 @@ function reloadProject() {
   font-size: 12px;
 }
 .export-toolbar {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--app-color-border-light);
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #f5f5f7;
 }
 .export-search {
   width: min(300px, 100%);
@@ -864,7 +1065,7 @@ function reloadProject() {
 .page-group {
   min-width: 0;
   border: 1px solid var(--app-color-border-light);
-  border-radius: 6px;
+  border-radius: 12px;
   overflow: hidden;
 }
 .page-group-heading {
@@ -872,7 +1073,7 @@ function reloadProject() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  background: var(--app-color-surface-muted);
+  background: #f7f7fa;
   font-size: 13px;
 }
 .page-group-heading span {
@@ -888,7 +1089,7 @@ function reloadProject() {
   cursor: pointer;
 }
 .page-option:hover {
-  background: var(--app-color-primary-soft);
+  background: #f2f2f7;
 }
 .page-option input {
   margin-top: 3px;
@@ -915,6 +1116,19 @@ function reloadProject() {
   padding-top: 18px;
   border-top: 1px solid var(--app-color-border-light);
 }
+.transfer-page :deep(.el-button:not(.is-link)) {
+  min-height: 38px;
+  border-radius: 10px;
+  font-weight: 550;
+}
+.transfer-page :deep(.upload-row .el-button) {
+  min-height: 44px;
+}
+.transfer-page :deep(.el-input__wrapper),
+.transfer-page :deep(.el-select__wrapper) {
+  min-height: 40px;
+  border-radius: 10px;
+}
 .package-name {
   width: 260px;
 }
@@ -931,10 +1145,30 @@ function reloadProject() {
 @media (max-width: 800px) {
   .transfer-page {
     width: calc(100% - 32px);
-    padding-top: 20px;
+    padding-top: 28px;
+  }
+  .transfer-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .tool-hero__context {
+    width: 100%;
+  }
+  .transfer-mode-switch {
+    grid-template-columns: 1fr;
   }
   .tool-panel {
     padding: 18px;
+  }
+  .project-target-row,
+  .upload-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .project-target-select {
+    width: 100%;
+    margin-left: 0;
   }
   .panel-heading,
   .export-toolbar {

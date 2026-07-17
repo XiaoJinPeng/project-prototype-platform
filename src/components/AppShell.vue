@@ -123,6 +123,7 @@ import { localeOptions, setLocale } from '../i18n';
 import { translateStaticCopy } from '../i18n/legacy-localizer';
 import { downloadProjectSource } from '../services/project-sources';
 import {
+  canPersistPlatformSettings,
   loadPlatformSettings,
   platformSettings,
   setPlatformDeveloperMode,
@@ -252,6 +253,8 @@ function logout() {
 }
 
 async function setDeveloperMode(enabled) {
+  if (!canPersistPlatformSettings) return;
+
   try {
     await setPlatformDeveloperMode(enabled);
   } catch (error) {

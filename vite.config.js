@@ -8,8 +8,10 @@ import { platformSettingsPlugin } from './plugins/platform-settings-plugin.js';
 
 const projectsRoot = fileURLToPath(new URL('./projects/', import.meta.url));
 const platformSettingsPath = fileURLToPath(new URL('./platform-settings.json', import.meta.url));
+const base = process.env.VITE_BASE_PATH || '/';
 
 export default defineConfig({
+  base,
   plugins: [
     vue(),
     platformSettingsPlugin({ settingsPath: platformSettingsPath }),

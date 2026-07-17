@@ -147,7 +147,7 @@ const routes = [
 
 const isExportRuntime = typeof window !== 'undefined' && Boolean(window.__PROJECT_EXPORT__);
 const router = createRouter({
-  history: isExportRuntime ? createWebHashHistory() : createWebHistory(),
+  history: isExportRuntime ? createWebHashHistory() : createWebHistory(import.meta.env.BASE_URL),
   routes,
 });
 

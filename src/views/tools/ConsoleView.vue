@@ -4,6 +4,7 @@ import { ArrowRight, FolderOpened, Menu, SetUp, Upload } from '@element-plus/ico
 import { ElMessage } from 'element-plus';
 
 import {
+  canPersistPlatformSettings,
   loadPlatformSettings,
   platformSettings,
   setPlatformDeveloperMode,
@@ -12,6 +13,8 @@ import {
 const developerMode = computed(() => platformSettings.developerMode);
 
 async function toggleDeveloperMode() {
+  if (!canPersistPlatformSettings) return;
+
   try {
     await setPlatformDeveloperMode(!developerMode.value);
   } catch (error) {
@@ -79,14 +82,21 @@ const tools = [
           <p class="mt-1 text-sm leading-6 text-[#6E6E73]">
             开启后，在查看原型页面的同时显示对应的 PRD。默认使用固定分屏。
           </p>
+          <p v-if="!canPersistPlatformSettings" class="mt-1 text-xs text-[#9A9AA1]">
+            当前为静态部署，修改开发模式后需要重新打包发布。
+          </p>
         </div>
         <button
           type="button"
           class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
-          :class="developerMode ? 'bg-[#0071E3] text-white' : 'bg-[#F2F2F7] text-[#6E6E73]'"
+          :class="[
+            developerMode ? 'bg-[#0071E3] text-white' : 'bg-[#F2F2F7] text-[#6E6E73]',
+            !canPersistPlatformSettings ? 'cursor-not-allowed opacity-70' : '',
+          ]"
+          :disabled="!canPersistPlatformSettings"
           @click="toggleDeveloperMode"
         >
-          {{ developerMode ? '已开启' : '开启开发模式' }}
+          {{ developerMode ? '已开启' : canPersistPlatformSettings ? '开启开发模式' : '需重新打包' }}
         </button>
       </section>
 

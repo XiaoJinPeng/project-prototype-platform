@@ -5,9 +5,13 @@
         <el-icon><ArrowLeft /></el-icon>
         返回首页
       </RouterLink>
-      <div>
-        <h1>项目包状态</h1>
-        <p>管理项目包的基础资料；新增项目会从模板生成初始化包。</p>
+      <div class="packages-title">
+        <div class="tool-title-icon"><el-icon><FolderOpened /></el-icon></div>
+        <div>
+          <p class="eyebrow">PROJECT LIBRARY</p>
+          <h1>项目包状态</h1>
+          <p>管理本地项目资料、首页入口和项目能力；新增项目会从模板生成初始化包。</p>
+        </div>
       </div>
       <div class="packages-header__actions">
         <el-button v-if="canManageProjects" type="primary" @click="openCreateDialog">
@@ -24,13 +28,43 @@
       </div>
     </header>
 
-    <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-alert v-if="notice" :title="notice" type="success" :closable="true" @close="notice = ''" />
+    <div class="packages-feedback">
+      <el-alert v-if="error" :title="error" type="error" :closable="false" />
+      <el-alert v-if="notice" :title="notice" type="success" :closable="true" @close="notice = ''" />
+    </div>
+
+    <section class="packages-overview" aria-label="项目包概览">
+      <div class="packages-overview__lead">
+        <span class="overview-kicker">LOCAL PROJECT PACKAGES</span>
+        <h2>项目资料总览</h2>
+        <p>首页、客户端入口、文档和移动端内容都来自本地项目包。</p>
+      </div>
+      <div class="overview-metrics">
+        <div class="overview-metric">
+          <span>可用项目</span>
+          <strong>{{ projects.length }}</strong>
+          <small>已通过完整性检查</small>
+        </div>
+        <div class="overview-metric" :class="{ 'is-warning': invalidProjects.length }">
+          <span>异常项目</span>
+          <strong>{{ invalidProjects.length }}</strong>
+          <small>{{ invalidProjects.length ? '需要处理后才能使用' : '当前没有异常' }}</small>
+        </div>
+        <div class="overview-metric">
+          <span>当前权限</span>
+          <strong>{{ canManageProjects ? '可管理' : '只读' }}</strong>
+          <small>{{ canManageProjects ? '可编辑项目包配置' : '仅查看生产构建内容' }}</small>
+        </div>
+      </div>
+    </section>
 
     <section class="packages-section">
       <div class="packages-section__heading">
-        <h2>可用项目</h2>
-        <span>{{ projects.length }} 个</span>
+        <div>
+          <span class="section-kicker">PROJECT INDEX</span>
+          <h2>项目清单</h2>
+        </div>
+        <span>{{ projects.length }} 个项目</span>
       </div>
       <el-table :data="projects" border empty-text="尚未发现有效项目包">
         <el-table-column prop="name" label="项目名称" min-width="180" />
@@ -78,12 +112,14 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="920px"
+      width="980px"
       destroy-on-close
-      class="project-dialog"
+      :close-on-click-modal="false"
+      class="project-dialog apple-tool-dialog"
+      modal-class="apple-tool-overlay"
     >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="112px" class="project-form">
-        <el-tabs v-model="activeConfigTab" class="project-config-tabs">
+        <el-tabs v-model="activeConfigTab" class="project-config-tabs" tab-position="left">
           <el-tab-pane label="基础资料" name="basic">
             <el-form-item label="项目 ID" prop="id">
               <el-input
@@ -277,8 +313,13 @@
         </el-tabs>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitForm">保存</el-button>
+        <div class="apple-dialog-footer">
+          <span>保存后会重新扫描项目包并更新首页入口。</span>
+          <div>
+            <el-button @click="dialogVisible = false">取消</el-button>
+            <el-button type="primary" :loading="saving" @click="submitForm">保存</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
   </main>
@@ -287,7 +328,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, Edit, Plus, Refresh, Upload } from '@element-plus/icons-vue';
+import { ArrowLeft, Edit, FolderOpened, Plus, Refresh, Upload } from '@element-plus/icons-vue';
 
 import { getProjectAssetUrl, onProjectPackagesChanged } from '../../services/project-assets';
 
@@ -642,28 +683,64 @@ onBeforeUnmount(() => stopWatching());
 
 <style scoped>
 .packages-page {
-  width: min(1120px, calc(100% - 64px));
+  width: min(1280px, calc(100% - 64px));
   margin: 0 auto;
-  padding: 28px 0 48px;
+  padding: 40px 0 64px;
 }
 .packages-header {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 22px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 24px;
+  margin-bottom: 28px;
 }
 .packages-header h1,
 .packages-header p {
   margin: 0;
 }
+.packages-title {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 14px;
+}
+.packages-title > div:last-child {
+  min-width: 0;
+}
+.packages-title .tool-title-icon {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  border-radius: 14px;
+  background: #e5f0ff;
+  color: var(--app-color-primary);
+  font-size: 22px;
+}
+.packages-title .eyebrow {
+  margin: 0 0 8px;
+  color: var(--app-color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
 .packages-header h1 {
-  font-size: 26px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
 }
 .packages-header p {
-  margin-top: 6px;
+  margin-top: 10px;
   color: var(--app-color-text-muted);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.packages-title p:not(.eyebrow) {
+  margin: 10px 0 0;
 }
 .packages-header__actions {
   display: flex;
@@ -675,31 +752,201 @@ onBeforeUnmount(() => stopWatching());
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 0;
   color: var(--app-color-text-secondary);
   font-size: 13px;
+  transition: color 160ms ease;
+}
+.packages-back:hover {
+  color: var(--app-color-primary);
+}
+.packages-feedback {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.packages-feedback :deep(.el-alert) {
+  border-radius: 12px;
+}
+.packages-overview {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+  padding: 24px 28px;
+  border: 0.5px solid rgb(0 0 0 / 9%);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
+}
+.packages-overview__lead {
+  display: flex;
+  min-width: 230px;
+  flex-direction: column;
+  justify-content: center;
+}
+.overview-kicker,
+.section-kicker {
+  color: var(--app-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.packages-overview h2 {
+  margin: 8px 0 0;
+  font-size: 22px;
+  letter-spacing: -0.025em;
+}
+.packages-overview p {
+  margin: 8px 0 0;
+  color: var(--app-color-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.overview-metrics {
+  display: grid;
+  min-width: min(100%, 540px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-left: 1px solid rgb(0 0 0 / 7%);
+}
+.overview-metric {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 0 22px;
+  border-right: 1px solid rgb(0 0 0 / 7%);
+}
+.overview-metric:last-child {
+  border-right: 0;
+}
+.overview-metric span,
+.overview-metric small {
+  color: var(--app-color-text-muted);
+  font-size: 12px;
+}
+.overview-metric strong {
+  color: var(--app-color-text-primary);
+  font-size: 24px;
+  letter-spacing: -0.035em;
+}
+.overview-metric.is-warning strong {
+  color: var(--app-color-warning-text);
 }
 .packages-section {
-  margin-top: 20px;
+  margin-top: 24px;
+  padding: 24px;
+  border: 0.5px solid rgb(0 0 0 / 10%);
+  border-radius: 16px;
+  background: var(--app-color-surface);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
 }
 .packages-section__heading {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
+}
+.packages-section__heading > div {
+  display: grid;
+  gap: 5px;
+}
+.packages-section__heading .section-kicker {
+  letter-spacing: 0.1em;
 }
 .packages-section__heading h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
 }
 .packages-section__heading span {
   color: var(--app-color-text-muted);
   font-size: 12px;
 }
+.packages-section :deep(.el-table) {
+  overflow: hidden;
+  border-radius: 10px;
+  --el-table-border-color: rgb(0 0 0 / 7%);
+}
+.packages-section :deep(.el-table .el-table__cell) {
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+.packages-section :deep(.el-table th.el-table__cell) {
+  background: #f7f7fa;
+  color: var(--app-color-text-secondary);
+  font-weight: 600;
+}
+.packages-section :deep(.el-table tr:hover > td.el-table__cell) {
+  background: #f2f2f7;
+}
 .project-form {
-  padding-top: 4px;
+  padding: 0;
 }
 .project-config-tabs {
-  min-height: 520px;
+  height: min(68vh, 680px);
+}
+:global(.project-dialog .el-dialog__body) {
+  max-height: none;
+  overflow: hidden;
+  padding: 0;
+}
+:global(.project-dialog .project-config-tabs > .el-tabs__header.is-left) {
+  width: 190px;
+  margin: 0;
+  padding: 18px 12px;
+  border-right: 0.5px solid rgb(0 0 0 / 8%);
+  background: #f5f5f7;
+}
+:global(.project-dialog .project-config-tabs .el-tabs__nav-wrap.is-left::after) {
+  display: none;
+}
+:global(.project-dialog .project-config-tabs .el-tabs__active-bar.is-left) {
+  display: none;
+}
+:global(.project-dialog .project-config-tabs .el-tabs__item.is-left) {
+  height: 42px;
+  justify-content: flex-start;
+  margin-bottom: 4px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: #515154;
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+:global(.project-dialog .project-config-tabs .el-tabs__item.is-left:hover) {
+  color: #1d1d1f;
+  background: rgb(255 255 255 / 68%);
+}
+:global(.project-dialog .project-config-tabs .el-tabs__item.is-left.is-active) {
+  color: var(--app-color-primary);
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
+}
+:global(.project-dialog .project-config-tabs > .el-tabs__content) {
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px 28px 34px;
+}
+.apple-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.apple-dialog-footer > span {
+  color: #6e6e73;
+  font-size: 12px;
+}
+.apple-dialog-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .tab-intro {
   margin: 0;
@@ -721,10 +968,10 @@ onBeforeUnmount(() => stopWatching());
 }
 .client-config-card,
 .resource-entry-card {
-  padding: 16px;
-  border: 1px solid var(--app-color-border);
-  border-radius: var(--app-radius-panel);
-  background: var(--app-color-surface-subtle);
+  padding: 18px;
+  border: 0.5px solid rgb(0 0 0 / 8%);
+  border-radius: 14px;
+  background: #f8f8fa;
 }
 .client-config-card__header,
 .resource-entry-card__header {
@@ -792,7 +1039,7 @@ onBeforeUnmount(() => stopWatching());
   height: 56px;
   overflow: hidden;
   border: 1px solid var(--app-color-border);
-  border-radius: 6px;
+  border-radius: 12px;
   background: var(--app-color-page);
   color: var(--app-color-text-muted);
   font-size: 12px;
@@ -806,20 +1053,67 @@ onBeforeUnmount(() => stopWatching());
 .logo-actions {
   min-width: 0;
 }
+.packages-page :deep(.packages-header__actions .el-button),
+.packages-page :deep(.packages-section .el-button:not(.is-link)) {
+  min-height: 38px;
+  border-radius: 10px;
+  font-weight: 550;
+}
+@media (max-width: 1080px) {
+  .packages-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+  .packages-header__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-left: 34px;
+  }
+}
+@media (max-width: 920px) {
+  .packages-overview {
+    flex-direction: column;
+    padding: 20px;
+  }
+  .overview-metrics {
+    min-width: 0;
+    border-top: 1px solid rgb(0 0 0 / 7%);
+    border-left: 0;
+    padding-top: 16px;
+  }
+  .overview-metric {
+    padding: 0 12px;
+  }
+}
 @media (max-width: 760px) {
   .packages-page {
     width: calc(100% - 32px);
   }
   .packages-header {
     grid-template-columns: 1fr auto;
+    align-items: start;
   }
   .packages-header__actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
+    padding-left: 0;
   }
   .packages-header > div:not(.packages-header__actions) {
     grid-column: 1 / -1;
     grid-row: 1;
+  }
+  .packages-overview {
+    flex-direction: column;
+    padding: 20px;
+  }
+  .overview-metrics {
+    min-width: 0;
+    border-top: 1px solid rgb(0 0 0 / 7%);
+    border-left: 0;
+    padding-top: 16px;
+  }
+  .overview-metric {
+    padding: 0 12px;
   }
   .client-config-grid {
     grid-template-columns: 1fr;
@@ -833,6 +1127,49 @@ onBeforeUnmount(() => stopWatching());
   .feature-switches {
     grid-template-columns: 1fr;
     padding-left: 0;
+  }
+  :global(.project-dialog .project-config-tabs) {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+  }
+  :global(.project-dialog .project-config-tabs > .el-tabs__header.is-left) {
+    width: 100%;
+    height: auto;
+    padding: 10px;
+    border-right: 0;
+    border-bottom: 0.5px solid rgb(0 0 0 / 8%);
+  }
+  :global(.project-dialog .project-config-tabs .el-tabs__nav-scroll) {
+    overflow-x: auto;
+  }
+  :global(.project-dialog .project-config-tabs .el-tabs__nav.is-left) {
+    display: flex;
+    float: none;
+    gap: 4px;
+    transform: none !important;
+  }
+  :global(.project-dialog .project-config-tabs .el-tabs__item.is-left) {
+    height: 38px;
+    flex: 0 0 auto;
+    margin: 0;
+    white-space: nowrap;
+  }
+  :global(.project-dialog .project-config-tabs > .el-tabs__content) {
+    height: auto;
+    max-height: calc(100svh - 230px);
+    padding: 18px;
+  }
+  .apple-dialog-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .apple-dialog-footer > span {
+    display: none;
+  }
+  .apple-dialog-footer > div {
+    justify-content: flex-end;
   }
 }
 </style>

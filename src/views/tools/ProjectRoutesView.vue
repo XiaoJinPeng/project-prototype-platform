@@ -5,10 +5,13 @@
         <el-icon><ArrowLeft /></el-icon>
         返回项目包状态
       </RouterLink>
-      <div>
-        <p class="eyebrow">PROJECT ROUTES</p>
-        <h1>路由菜单管理</h1>
-        <p class="subtitle">管理每个项目客户端的页面路由和菜单登记；删除或替换前会保留可恢复备份。</p>
+      <div class="routes-title">
+        <div class="tool-title-icon"><el-icon><Menu /></el-icon></div>
+        <div>
+          <p class="eyebrow">PROJECT ROUTES</p>
+          <h1>路由菜单管理</h1>
+          <p class="subtitle">管理每个项目客户端的页面路由和菜单登记；删除或替换前会保留可恢复备份。</p>
+        </div>
       </div>
       <div class="header-actions">
         <el-select v-model="selectedProjectId" class="project-select" placeholder="选择项目">
@@ -34,11 +37,37 @@
     />
     <el-alert v-if="error" :title="error" type="error" :closable="false" class="routes-alert" />
 
+    <section v-if="routeData" class="routes-overview" aria-label="路由工作区概览">
+      <div class="routes-overview__lead">
+        <span class="overview-kicker">ROUTE WORKSPACE</span>
+        <h2>{{ routeData.project.name }}</h2>
+        <p>{{ routeData.project.id }} · {{ routeData.project.version || '未设置版本' }}</p>
+      </div>
+      <div class="overview-metrics">
+        <div class="overview-metric">
+          <span>客户端</span>
+          <strong>{{ routeData.clients.length }}</strong>
+          <small>已登记入口</small>
+        </div>
+        <div class="overview-metric">
+          <span>页面路由</span>
+          <strong>{{ routeData.clients.reduce((total, client) => total + client.pages.length, 0) }}</strong>
+          <small>当前项目总数</small>
+        </div>
+        <div class="overview-metric">
+          <span>可恢复备份</span>
+          <strong>{{ (routeData.backups?.length || 0) + (routeData.sectionBackups?.length || 0) }}</strong>
+          <small>页面与分组修改记录</small>
+        </div>
+      </div>
+    </section>
+
     <section v-if="routeData" class="routes-panel">
       <div class="panel-heading">
         <div>
-          <h2>{{ routeData.project.name }}</h2>
-          <p>项目 ID：{{ routeData.project.id }} · {{ routeData.project.version || '未设置版本' }}</p>
+          <span class="section-kicker">CLIENT ROUTES</span>
+          <h2>客户端路由</h2>
+          <p>按客户端查看页面登记，新增路由会同时生成可运行的占位页面。</p>
         </div>
         <el-tag type="info">{{ routeData.clients.length }} 个客户端</el-tag>
       </div>
@@ -183,10 +212,20 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogMode === 'edit' ? '编辑路由' : '新增路由'"
-      width="560px"
+      width="640px"
       destroy-on-close
+      :close-on-click-modal="false"
+      class="route-editor-dialog apple-tool-dialog"
+      modal-class="apple-tool-overlay"
     >
-      <el-form label-position="top">
+      <div class="dialog-intro">
+        <span class="dialog-intro__icon"><el-icon><Menu /></el-icon></span>
+        <div>
+          <strong>{{ dialogMode === 'edit' ? '调整现有页面登记' : '建立新的页面入口' }}</strong>
+          <p>路由信息会同步到页面注册表和客户端菜单。</p>
+        </div>
+      </div>
+      <el-form label-position="top" class="route-dialog-form">
         <el-form-item label="客户端">
           <el-select v-model="routeForm.client" style="width: 100%" @change="syncRouteSections">
             <el-option
@@ -223,14 +262,27 @@
         </div>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitRoute">
-          {{ dialogMode === 'edit' ? '保存修改' : '生成路由' }}
-        </el-button>
+        <div class="apple-dialog-footer">
+          <span>{{ dialogMode === 'edit' ? '保存后会更新菜单登记。' : '生成后可继续导入正式页面内容。' }}</span>
+          <div>
+            <el-button @click="dialogVisible = false">取消</el-button>
+            <el-button type="primary" :loading="saving" @click="submitRoute">
+              {{ dialogMode === 'edit' ? '保存修改' : '生成路由' }}
+            </el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="sectionDialogVisible" title="编辑菜单分组" width="560px" destroy-on-close>
+    <el-dialog
+      v-model="sectionDialogVisible"
+      title="编辑菜单分组"
+      width="680px"
+      destroy-on-close
+      :close-on-click-modal="false"
+      class="route-section-dialog apple-tool-dialog"
+      modal-class="apple-tool-overlay"
+    >
       <div class="section-editor-heading">
         <p class="dialog-help">
           可新增、修改或删除菜单分组；已有分组 ID 保持不变，删除仍被页面使用的分组时系统会阻止保存。
@@ -249,8 +301,13 @@
         <el-empty v-if="!sectionDraft.length" description="当前客户端暂无菜单分组" :image-size="70" />
       </div>
       <template #footer>
-        <el-button @click="sectionDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="sectionSaving" @click="saveSections">保存分组</el-button>
+        <div class="apple-dialog-footer">
+          <span>保存前会自动保留本次菜单分组配置。</span>
+          <div>
+            <el-button @click="sectionDialogVisible = false">取消</el-button>
+            <el-button type="primary" :loading="sectionSaving" @click="saveSections">保存分组</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
   </main>
@@ -259,7 +316,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { ArrowLeft, ArrowRight, Edit, Plus, Refresh } from '@element-plus/icons-vue';
+import { ArrowLeft, ArrowRight, Edit, Menu, Plus, Refresh } from '@element-plus/icons-vue';
 
 import { installedProjects } from '../../config/project-packages';
 
@@ -410,7 +467,13 @@ async function removeSection(index) {
       await ElMessageBox.confirm(
         `确认删除菜单分组“${section.title}”？如果仍有页面使用该分组，保存时会被阻止。`,
         '确认删除分组',
-        { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+        {
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+          type: 'warning',
+          customClass: 'apple-confirm-dialog',
+          modalClass: 'apple-tool-overlay',
+        },
       );
     } catch {
       return;
@@ -480,7 +543,13 @@ async function deleteRoute(client, page) {
     await ElMessageBox.confirm(
       `删除“${page.title}”后，路由会从菜单和页面注册表移除，但 Vue 文件和原定义会备份到项目包内。`,
       '确认删除路由',
-      { confirmButtonText: '删除并备份', cancelButtonText: '取消', type: 'warning' },
+      {
+        confirmButtonText: '删除并备份',
+        cancelButtonText: '取消',
+        type: 'warning',
+        customClass: 'apple-confirm-dialog',
+        modalClass: 'apple-tool-overlay',
+      },
     );
   } catch {
     return;
@@ -508,7 +577,13 @@ async function restoreBackup(backup) {
     await ElMessageBox.confirm(
       `确认还原“${backup.original?.title || backup.original?.path}”？当前修改后的页面会被移除，原页面会重新登记。`,
       '确认还原页面',
-      { confirmButtonText: '确认还原', cancelButtonText: '取消', type: 'warning' },
+      {
+        confirmButtonText: '确认还原',
+        cancelButtonText: '取消',
+        type: 'warning',
+        customClass: 'apple-confirm-dialog',
+        modalClass: 'apple-tool-overlay',
+      },
     );
   } catch {
     return;
@@ -536,7 +611,13 @@ async function restoreSectionBackup(backup) {
     await ElMessageBox.confirm(
       '确认还原这次菜单分组修改？当前分组名称会恢复为修改前的版本。',
       '确认还原菜单分组',
-      { confirmButtonText: '确认还原', cancelButtonText: '取消', type: 'warning' },
+      {
+        confirmButtonText: '确认还原',
+        cancelButtonText: '取消',
+        type: 'warning',
+        customClass: 'apple-confirm-dialog',
+        modalClass: 'apple-tool-overlay',
+      },
     );
   } catch {
     return;
@@ -562,32 +643,59 @@ async function restoreSectionBackup(backup) {
 
 <style scoped>
 .routes-page {
-  width: min(1240px, calc(100% - 64px));
+  width: min(1280px, calc(100% - 64px));
   min-height: 100svh;
   margin: 0 auto;
-  padding: 28px 0 48px;
+  padding: 40px 0 64px;
   color: var(--app-color-text-primary);
 }
 .routes-header {
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.routes-title {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 14px;
+}
+.routes-title > div:last-child {
+  min-width: 0;
+}
+.routes-title .tool-title-icon {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 20px;
+  justify-content: center;
+  margin-top: 2px;
+  border-radius: 14px;
+  background: #e5f0ff;
+  color: var(--app-color-primary);
+  font-size: 22px;
 }
 .back-link {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 6px 0;
   color: var(--app-color-text-secondary);
   font-size: 13px;
+  transition: color 160ms ease;
+}
+.back-link:hover {
+  color: var(--app-color-primary);
 }
 .eyebrow {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   color: var(--app-color-primary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.16em;
 }
 .routes-header h1,
 .routes-header p,
@@ -596,14 +704,18 @@ async function restoreSectionBackup(backup) {
   margin: 0;
 }
 .routes-header h1 {
-  font-size: 26px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
 }
 .subtitle,
 .panel-heading p,
 .client-summary span {
-  margin-top: 6px !important;
+  margin-top: 10px !important;
   color: var(--app-color-text-muted);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.55;
 }
 .header-actions,
 .client-toolbar,
@@ -621,23 +733,116 @@ async function restoreSectionBackup(backup) {
 }
 .routes-alert {
   margin-bottom: 16px;
+  border-radius: 12px;
+}
+.routes-overview {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+  padding: 24px 28px;
+  border: 0.5px solid rgb(0 0 0 / 9%);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
+}
+.routes-overview__lead {
+  display: flex;
+  min-width: 230px;
+  flex-direction: column;
+  justify-content: center;
+}
+.overview-kicker,
+.section-kicker {
+  color: var(--app-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.routes-overview h2 {
+  margin: 8px 0 0;
+  font-size: 22px;
+  letter-spacing: -0.025em;
+}
+.routes-overview p {
+  margin: 8px 0 0;
+  color: var(--app-color-text-muted);
+  font-size: 13px;
+}
+.overview-metrics {
+  display: grid;
+  min-width: min(100%, 540px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-left: 1px solid rgb(0 0 0 / 7%);
+}
+.overview-metric {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 0 22px;
+  border-right: 1px solid rgb(0 0 0 / 7%);
+}
+.overview-metric:last-child {
+  border-right: 0;
+}
+.overview-metric span,
+.overview-metric small {
+  color: var(--app-color-text-muted);
+  font-size: 12px;
+}
+.overview-metric strong {
+  color: var(--app-color-text-primary);
+  font-size: 24px;
+  letter-spacing: -0.035em;
 }
 .routes-panel {
-  margin-bottom: 20px;
-  padding: 22px;
-  border: 1px solid var(--app-color-border);
-  border-radius: var(--app-radius-panel);
+  margin-bottom: 24px;
+  padding: 28px;
+  border: 0.5px solid rgb(0 0 0 / 10%);
+  border-radius: 16px;
   background: var(--app-color-surface);
-  box-shadow: var(--app-shadow-panel);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
 }
 .panel-heading {
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 .panel-heading h2 {
-  font-size: 18px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.panel-heading .section-kicker {
+  display: block;
+  margin-bottom: 6px;
 }
 .client-tabs :deep(.el-tabs__header) {
-  margin-bottom: 18px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 20px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #f2f2f7;
+}
+.client-tabs :deep(.el-tabs__nav-wrap::after),
+.client-tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+.client-tabs :deep(.el-tabs__item) {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 9px;
+  color: #6e6e73;
+  font-size: 13px;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.client-tabs :deep(.el-tabs__item.is-active) {
+  color: #1d1d1f;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 9%);
 }
 .client-toolbar {
   margin-bottom: 14px;
@@ -654,29 +859,118 @@ async function restoreSectionBackup(backup) {
 .route-table {
   width: 100%;
 }
+.routes-panel :deep(.el-table) {
+  overflow: hidden;
+  border-radius: 10px;
+  --el-table-border-color: rgb(0 0 0 / 7%);
+}
+.routes-panel :deep(.el-table .el-table__cell) {
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+.routes-panel :deep(.el-table th.el-table__cell) {
+  background: #f7f7fa;
+  color: var(--app-color-text-secondary);
+  font-weight: 600;
+}
+.routes-panel :deep(.el-table tr:hover > td.el-table__cell) {
+  background: #f2f2f7;
+}
 .dialog-help {
   margin: 0 0 16px;
   color: var(--app-color-text-muted);
   font-size: 13px;
+  line-height: 1.6;
+}
+.dialog-intro {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #f5f5f7;
+}
+.dialog-intro__icon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: #e5f0ff;
+  color: var(--app-color-primary);
+  font-size: 18px;
+}
+.dialog-intro > div {
+  display: grid;
+  gap: 3px;
+}
+.dialog-intro strong {
+  color: #1d1d1f;
+  font-size: 14px;
+}
+.dialog-intro p {
+  margin: 0;
+  color: #6e6e73;
+  font-size: 12px;
+}
+.route-dialog-form {
+  padding-top: 2px;
 }
 .section-editor-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #f5f5f7;
 }
 .section-editor-heading .dialog-help {
   flex: 1;
+  margin: 0;
 }
 .section-editor-list {
   display: grid;
   gap: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 .section-editor-row {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+  padding: 12px;
+  border: 0.5px solid rgb(0 0 0 / 8%);
+  border-radius: 12px;
+  background: #fff;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+.section-editor-row:focus-within {
+  border-color: rgb(var(--app-color-primary-rgb) / 28%);
+  background: #fbfdff;
+}
+.apple-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.apple-dialog-footer > span {
+  color: #6e6e73;
+  font-size: 12px;
+}
+.apple-dialog-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .backup-section-row {
   display: flex;
@@ -707,6 +1001,42 @@ async function restoreSectionBackup(backup) {
   font-size: 12px;
   line-height: 1.5;
 }
+.routes-page :deep(.header-actions .el-button),
+.routes-page :deep(.client-actions .el-button) {
+  min-height: 38px;
+  border-radius: 10px;
+  font-weight: 550;
+}
+.routes-page :deep(.header-actions .el-select__wrapper) {
+  min-height: 40px;
+  border-radius: 10px;
+}
+@media (max-width: 1080px) {
+  .routes-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+  .header-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-left: 34px;
+  }
+}
+@media (max-width: 920px) {
+  .routes-overview {
+    flex-direction: column;
+    padding: 20px;
+  }
+  .overview-metrics {
+    min-width: 0;
+    border-top: 1px solid rgb(0 0 0 / 7%);
+    border-left: 0;
+    padding-top: 16px;
+  }
+  .overview-metric {
+    padding: 0 12px;
+  }
+}
 @media (max-width: 840px) {
   .routes-page {
     width: calc(100% - 32px);
@@ -715,11 +1045,41 @@ async function restoreSectionBackup(backup) {
     grid-template-columns: 1fr;
     align-items: start;
   }
+  .routes-overview {
+    flex-direction: column;
+    padding: 20px;
+  }
+  .overview-metrics {
+    min-width: 0;
+    border-top: 1px solid rgb(0 0 0 / 7%);
+    border-left: 0;
+    padding-top: 16px;
+  }
+  .overview-metric {
+    padding: 0 12px;
+  }
   .header-actions {
     justify-content: flex-start;
+    padding-left: 0;
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+  .section-editor-row {
+    grid-template-columns: 1fr;
+  }
+  .section-editor-heading {
+    flex-direction: column;
+  }
+  .apple-dialog-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .apple-dialog-footer > span {
+    display: none;
+  }
+  .apple-dialog-footer > div {
+    justify-content: flex-end;
   }
 }
 </style>
