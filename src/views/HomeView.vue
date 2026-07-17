@@ -1,19 +1,14 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { ElMessage } from 'element-plus';
 import { useRoute, useRouter } from 'vue-router';
 
 import { getProject, getProjectEntryPath, installedProjects } from '../config/project-packages';
-import {
-  loadPlatformSettings,
-  platformSettings,
-  setPlatformDeveloperMode,
-} from '../services/platform-settings';
 
 const route = useRoute();
 const router = useRouter();
 const showProjectMenu = ref(false);
-const showConsole = computed(() => platformSettings.developerMode);
+const consoleVisibilityKey = 'project-platform:home-engineering-tools';
+const showConsole = ref(window.sessionStorage.getItem(consoleVisibilityKey) === 'true');
 
 const selectableProjects = computed(() =>
   installedProjects.filter((project) => project.homepage?.visible !== false),
@@ -100,12 +95,9 @@ function chooseProject(projectId) {
   showProjectMenu.value = false;
 }
 
-async function toggleConsole() {
-  try {
-    await setPlatformDeveloperMode(!showConsole.value);
-  } catch (error) {
-    ElMessage.error(error.message || '共享开发模式保存失败。');
-  }
+function toggleConsole() {
+  showConsole.value = !showConsole.value;
+  window.sessionStorage.setItem(consoleVisibilityKey, String(showConsole.value));
 }
 
 function handleConsoleShortcut(event) {
@@ -128,7 +120,6 @@ function openPageTransfer() {
 }
 
 onMounted(() => {
-  void loadPlatformSettings();
   window.addEventListener('keydown', handleConsoleShortcut);
 });
 onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcut));
