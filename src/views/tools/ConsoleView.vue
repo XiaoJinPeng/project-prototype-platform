@@ -1,14 +1,25 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, onMounted } from 'vue';
 import { ArrowRight, FolderOpened, Menu, SetUp, Upload } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
 
-const developerModeKey = 'project-platform:developer-mode';
-const developerMode = ref(window.sessionStorage.getItem(developerModeKey) === 'true');
+import {
+  loadPlatformSettings,
+  platformSettings,
+  setPlatformDeveloperMode,
+} from '../../services/platform-settings';
 
-function toggleDeveloperMode() {
-  developerMode.value = !developerMode.value;
-  window.sessionStorage.setItem(developerModeKey, String(developerMode.value));
+const developerMode = computed(() => platformSettings.developerMode);
+
+async function toggleDeveloperMode() {
+  try {
+    await setPlatformDeveloperMode(!developerMode.value);
+  } catch (error) {
+    ElMessage.error(error.message || '共享开发模式保存失败。');
+  }
 }
+
+onMounted(() => void loadPlatformSettings());
 
 const tools = [
   {

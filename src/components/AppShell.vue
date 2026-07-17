@@ -122,6 +122,11 @@ import PrdReviewPanel from './PrdReviewPanel.vue';
 import { localeOptions, setLocale } from '../i18n';
 import { translateStaticCopy } from '../i18n/legacy-localizer';
 import { downloadProjectSource } from '../services/project-sources';
+import {
+  loadPlatformSettings,
+  platformSettings,
+  setPlatformDeveloperMode,
+} from '../services/platform-settings';
 
 const props = defineProps({
   projectId: {
@@ -155,10 +160,8 @@ const currentLocale = computed({
   get: () => locale.value,
   set: (value) => setLocale(value),
 });
-const developerModeKey = 'project-platform:developer-mode';
-const developerMode = ref(
-  typeof window !== 'undefined' && window.sessionStorage.getItem(developerModeKey) === 'true',
-);
+const developerModeOverride = ref(false);
+const developerMode = computed(() => platformSettings.developerMode || developerModeOverride.value);
 const prdPanelOpen = ref(false);
 const prdLayoutMode = ref('split');
 
@@ -191,7 +194,7 @@ watch(
 watch(
   () => route.query.__dev,
   (value) => {
-    if (value === '1' || value === 'true') setDeveloperMode(true);
+    developerModeOverride.value = value === '1' || value === 'true';
   },
   { immediate: true },
 );
@@ -248,12 +251,13 @@ function logout() {
   router.push(`/p/${props.projectId}/${props.client}/login`);
 }
 
-function setDeveloperMode(enabled) {
-  developerMode.value = enabled;
-  if (typeof window !== 'undefined') {
-    window.sessionStorage.setItem(developerModeKey, String(enabled));
+async function setDeveloperMode(enabled) {
+  try {
+    await setPlatformDeveloperMode(enabled);
+  } catch (error) {
+    ElMessage.error(error.message || '共享开发模式保存失败。');
   }
-  if (!enabled) prdPanelOpen.value = false;
+  if (!enabled && !developerModeOverride.value) prdPanelOpen.value = false;
 }
 
 function openDocumentWindow(documentUrl) {
@@ -281,6 +285,7 @@ function handleDeveloperShortcut(event) {
 }
 
 onMounted(() => {
+  void loadPlatformSettings();
   window.addEventListener('keydown', handleDeveloperShortcut);
 });
 
