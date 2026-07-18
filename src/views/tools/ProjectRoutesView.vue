@@ -1,12 +1,14 @@
 <template>
-  <main class="routes-page">
+  <main class="routes-page platform-page">
     <header class="routes-header">
       <RouterLink to="/tools/projects" class="back-link">
         <el-icon><ArrowLeft /></el-icon>
         返回项目包状态
       </RouterLink>
       <div class="routes-title">
-        <div class="tool-title-icon"><el-icon><Menu /></el-icon></div>
+        <div class="tool-title-icon">
+          <el-icon><Menu /></el-icon>
+        </div>
         <div>
           <p class="eyebrow">PROJECT ROUTES</p>
           <h1>路由菜单管理</h1>
@@ -219,7 +221,9 @@
       modal-class="apple-tool-overlay"
     >
       <div class="dialog-intro">
-        <span class="dialog-intro__icon"><el-icon><Menu /></el-icon></span>
+        <span class="dialog-intro__icon"
+          ><el-icon><Menu /></el-icon
+        ></span>
         <div>
           <strong>{{ dialogMode === 'edit' ? '调整现有页面登记' : '建立新的页面入口' }}</strong>
           <p>路由信息会同步到页面注册表和客户端菜单。</p>
@@ -263,7 +267,9 @@
       </el-form>
       <template #footer>
         <div class="apple-dialog-footer">
-          <span>{{ dialogMode === 'edit' ? '保存后会更新菜单登记。' : '生成后可继续导入正式页面内容。' }}</span>
+          <span>{{
+            dialogMode === 'edit' ? '保存后会更新菜单登记。' : '生成后可继续导入正式页面内容。'
+          }}</span>
           <div>
             <el-button @click="dialogVisible = false">取消</el-button>
             <el-button type="primary" :loading="saving" @click="submitRoute">
@@ -643,7 +649,7 @@ async function restoreSectionBackup(backup) {
 
 <style scoped>
 .routes-page {
-  width: min(1280px, calc(100% - 64px));
+  width: min(var(--platform-content-max), calc(100% - 64px));
   min-height: 100svh;
   margin: 0 auto;
   padding: 40px 0 64px;
@@ -674,7 +680,7 @@ async function restoreSectionBackup(backup) {
   justify-content: center;
   margin-top: 2px;
   border-radius: 14px;
-  background: #e5f0ff;
+  background: color-mix(in srgb, var(--app-color-primary) 11%, white);
   color: var(--app-color-primary);
   font-size: 22px;
 }
@@ -743,9 +749,9 @@ async function restoreSectionBackup(backup) {
   margin-bottom: 22px;
   padding: 24px 28px;
   border: 0.5px solid rgb(0 0 0 / 9%);
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
+  border-radius: var(--platform-radius-surface);
+  background: var(--platform-color-surface);
+  box-shadow: var(--platform-shadow-surface);
 }
 .routes-overview__lead {
   display: flex;
@@ -801,9 +807,9 @@ async function restoreSectionBackup(backup) {
   margin-bottom: 24px;
   padding: 28px;
   border: 0.5px solid rgb(0 0 0 / 10%);
-  border-radius: 16px;
-  background: var(--app-color-surface);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
+  border-radius: var(--platform-radius-surface);
+  background: var(--platform-color-surface);
+  box-shadow: var(--platform-shadow-surface);
 }
 .panel-heading {
   margin-bottom: 22px;
@@ -861,7 +867,7 @@ async function restoreSectionBackup(backup) {
 }
 .routes-panel :deep(.el-table) {
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 12px;
   --el-table-border-color: rgb(0 0 0 / 7%);
 }
 .routes-panel :deep(.el-table .el-table__cell) {
@@ -899,7 +905,7 @@ async function restoreSectionBackup(backup) {
   align-items: center;
   justify-content: center;
   border-radius: 11px;
-  background: #e5f0ff;
+  background: color-mix(in srgb, var(--app-color-primary) 11%, white);
   color: var(--app-color-primary);
   font-size: 18px;
 }

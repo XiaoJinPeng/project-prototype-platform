@@ -437,6 +437,89 @@ a {
   color: var(--muted);
 }
 
+/* Platform chrome is opt-in so historical business pages keep their existing appearance. */
+.platform-page {
+  color: var(--platform-color-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --el-border-radius-base: var(--platform-radius-control);
+  --el-border-radius-small: 8px;
+}
+
+body:has(.platform-page) {
+  background: var(--platform-color-page);
+}
+
+.platform-page ::selection {
+  background: rgb(var(--app-color-primary-rgb) / 18%);
+}
+
+.platform-page :where(a, button, [role='button']) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.platform-page :where(a, button, [role='button'], input, select, textarea):focus-visible {
+  outline: 3px solid rgb(var(--app-color-primary-rgb) / 22%);
+  outline-offset: 2px;
+}
+
+.platform-page :where(button, [role='button'], .el-button):not(:disabled):active {
+  transform: scale(0.98);
+  transition-duration: var(--platform-motion-fast) !important;
+}
+
+.platform-page .el-button:not(.is-link) {
+  min-height: 38px;
+  border-radius: var(--platform-radius-control);
+  font-weight: 550;
+}
+
+.platform-page .el-input__wrapper,
+.platform-page .el-select__wrapper,
+.platform-page .el-textarea__inner,
+.platform-page .el-input-number {
+  border-radius: var(--platform-radius-control);
+}
+
+.platform-page .el-input__wrapper,
+.platform-page .el-select__wrapper {
+  min-height: 40px;
+}
+
+.platform-page .el-input__wrapper.is-focus,
+.platform-page .el-select__wrapper.is-focused,
+.platform-page .el-input__wrapper:focus-within,
+.platform-page .el-textarea__inner:focus {
+  box-shadow: 0 0 0 3px rgb(var(--app-color-primary-rgb) / 16%);
+}
+
+.platform-page .el-alert {
+  border: 0.5px solid rgb(0 0 0 / 8%);
+  border-radius: 12px;
+}
+
+.platform-page .el-tag {
+  border-radius: 999px;
+  font-weight: 550;
+}
+
+.platform-material {
+  border: 0.5px solid rgb(255 255 255 / 58%);
+  background: rgb(255 255 255 / 78%);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 7%);
+  backdrop-filter: blur(22px) saturate(160%);
+}
+
+.platform-popover {
+  border: 0.5px solid rgb(0 0 0 / 10%);
+  background: rgb(255 255 255 / 90%);
+  box-shadow: var(--platform-shadow-float);
+  backdrop-filter: blur(24px) saturate(170%);
+}
+
 @media (max-width: 1120px) {
   .app-shell {
     grid-template-columns: 220px minmax(0, 1fr);
@@ -492,6 +575,7 @@ a {
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 28px 80px rgb(0 0 0 / 22%);
+  transform-origin: center top;
   --el-border-radius-base: 10px;
 }
 
@@ -641,6 +725,21 @@ a {
   font-weight: 550;
 }
 
+.dialog-fade-enter-active .apple-tool-dialog,
+.dialog-fade-leave-active .apple-tool-dialog {
+  transition:
+    opacity 180ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms ease;
+}
+
+.dialog-fade-enter-from .apple-tool-dialog,
+.dialog-fade-leave-to .apple-tool-dialog {
+  opacity: 0;
+  filter: blur(4px);
+  transform: translateY(-8px) scale(0.985);
+}
+
 @media (max-width: 760px) {
   .apple-tool-dialog.el-dialog {
     width: calc(100vw - 20px) !important;
@@ -655,9 +754,52 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .platform-page *,
+  .platform-page *::before,
+  .platform-page *::after,
   .apple-tool-dialog *,
   .apple-confirm-dialog * {
     scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .dialog-fade-enter-from .apple-tool-dialog,
+  .dialog-fade-leave-to .apple-tool-dialog {
+    filter: none;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .platform-material,
+  .platform-popover,
+  .apple-tool-dialog .el-dialog__header,
+  .apple-tool-dialog .el-dialog__footer {
+    background: #fff;
+    backdrop-filter: none;
+  }
+
+  .apple-tool-overlay {
+    background: rgb(0 0 0 / 34%);
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .platform-material,
+  .platform-popover,
+  .apple-tool-dialog.el-dialog,
+  .apple-confirm-dialog.el-message-box {
+    border: 1px solid #6e6e73;
+    background: #fff;
+    backdrop-filter: none;
+  }
+
+  .platform-page .el-alert,
+  .platform-page .el-input__wrapper,
+  .platform-page .el-select__wrapper {
+    border-color: currentColor;
   }
 }

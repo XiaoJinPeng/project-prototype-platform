@@ -1,14 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Close,
-  Document,
-  Link,
-  Menu,
-  Search,
-} from '@element-plus/icons-vue';
+import { ArrowLeft, ArrowRight, Close, Document, Link, Menu, Search } from '@element-plus/icons-vue';
 import { useRouter } from 'vue-router';
 
 import DocsCenterView from '../views/docs/DocsCenterView.vue';
@@ -122,13 +114,17 @@ function moveSearchMatch(step) {
   <section class="prd-review-pane" :class="`prd-review-pane--${layoutMode}`">
     <header class="prd-review-pane__header">
       <div class="prd-review-pane__leading">
-        <span class="prd-review-pane__document-icon"><el-icon><Document /></el-icon></span>
+        <span class="prd-review-pane__document-icon"
+          ><el-icon><Document /></el-icon
+        ></span>
         <div class="prd-review-pane__identity">
           <span class="prd-review-pane__eyebrow">PRD REVIEW</span>
-          <strong>{{ pageTitle }}</strong>
-          <span class="prd-review-pane__path" :title="activeDocumentPath">
-            {{ activeDocument?.title || activeDocumentPath }}
-          </span>
+          <div class="prd-review-pane__title-line">
+            <strong>{{ pageTitle }}</strong>
+            <span class="prd-review-pane__path" :title="activeDocumentPath">
+              {{ activeDocument?.title || activeDocumentPath }}
+            </span>
+          </div>
         </div>
       </div>
       <div class="prd-review-pane__actions">
@@ -492,8 +488,8 @@ function moveSearchMatch(step) {
 }
 
 .prd-review-pane__header {
-  min-height: 82px;
-  padding: 15px 16px;
+  min-height: 66px;
+  padding: 10px 16px;
   border-bottom: 0.5px solid rgb(0 0 0 / 9%);
   background: rgb(255 255 255 / 92%);
   backdrop-filter: blur(18px) saturate(135%);
@@ -503,43 +499,64 @@ function moveSearchMatch(step) {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .prd-review-pane__document-icon {
   display: inline-flex;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 11px;
   background: #e5f0ff;
   color: var(--app-color-primary);
   font-size: 19px;
 }
 
 .prd-review-pane__identity {
-  gap: 3px;
+  gap: 2px;
 }
 
 .prd-review-pane__eyebrow {
   color: #6e6e73;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.14em;
 }
 
+.prd-review-pane__title-line {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .prd-review-pane__identity strong {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
   color: #1d1d1f;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.018em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .prd-review-pane__path {
+  min-width: 0;
+  flex: 0 0 auto;
   color: #86868b;
   font-size: 11px;
+  white-space: nowrap;
+}
+
+.prd-review-pane__path::before {
+  margin-right: 8px;
+  color: #c7c7cc;
+  content: '·';
 }
 
 .prd-review-pane__actions {

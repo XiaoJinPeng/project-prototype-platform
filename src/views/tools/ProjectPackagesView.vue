@@ -1,12 +1,14 @@
 <template>
-  <main class="packages-page">
+  <main class="packages-page platform-page">
     <header class="packages-header">
       <RouterLink to="/" class="packages-back">
         <el-icon><ArrowLeft /></el-icon>
         返回首页
       </RouterLink>
       <div class="packages-title">
-        <div class="tool-title-icon"><el-icon><FolderOpened /></el-icon></div>
+        <div class="tool-title-icon">
+          <el-icon><FolderOpened /></el-icon>
+        </div>
         <div>
           <p class="eyebrow">PROJECT LIBRARY</p>
           <h1>项目包状态</h1>
@@ -683,7 +685,8 @@ onBeforeUnmount(() => stopWatching());
 
 <style scoped>
 .packages-page {
-  width: min(1280px, calc(100% - 64px));
+  width: min(var(--platform-content-max), calc(100% - 64px));
+  min-height: 100svh;
   margin: 0 auto;
   padding: 40px 0 64px;
 }
@@ -716,7 +719,7 @@ onBeforeUnmount(() => stopWatching());
   justify-content: center;
   margin-top: 2px;
   border-radius: 14px;
-  background: #e5f0ff;
+  background: color-mix(in srgb, var(--app-color-primary) 11%, white);
   color: var(--app-color-primary);
   font-size: 22px;
 }
@@ -776,9 +779,9 @@ onBeforeUnmount(() => stopWatching());
   margin-bottom: 22px;
   padding: 24px 28px;
   border: 0.5px solid rgb(0 0 0 / 9%);
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
+  border-radius: var(--platform-radius-surface);
+  background: var(--platform-color-surface);
+  box-shadow: var(--platform-shadow-surface);
 }
 .packages-overview__lead {
   display: flex;
@@ -838,9 +841,9 @@ onBeforeUnmount(() => stopWatching());
   margin-top: 24px;
   padding: 24px;
   border: 0.5px solid rgb(0 0 0 / 10%);
-  border-radius: 16px;
-  background: var(--app-color-surface);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
+  border-radius: var(--platform-radius-surface);
+  background: var(--platform-color-surface);
+  box-shadow: var(--platform-shadow-surface);
 }
 .packages-section__heading {
   display: flex;
@@ -866,7 +869,7 @@ onBeforeUnmount(() => stopWatching());
 }
 .packages-section :deep(.el-table) {
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 12px;
   --el-table-border-color: rgb(0 0 0 / 7%);
 }
 .packages-section :deep(.el-table .el-table__cell) {

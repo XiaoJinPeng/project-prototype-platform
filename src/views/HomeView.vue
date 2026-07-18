@@ -7,6 +7,7 @@ import { getProject, getProjectEntryPath, installedProjects } from '../config/pr
 const route = useRoute();
 const router = useRouter();
 const showProjectMenu = ref(false);
+const projectMenuRef = ref(null);
 const consoleVisibilityKey = 'project-platform:home-engineering-tools';
 const showConsole = ref(window.sessionStorage.getItem(consoleVisibilityKey) === 'true');
 
@@ -105,6 +106,16 @@ function handleConsoleShortcut(event) {
     event.preventDefault();
     toggleConsole();
   }
+
+  if (event.key === 'Escape') {
+    showProjectMenu.value = false;
+  }
+}
+
+function handleOutsideProjectMenu(event) {
+  if (showProjectMenu.value && !projectMenuRef.value?.contains(event.target)) {
+    showProjectMenu.value = false;
+  }
 }
 
 function openRecentActivity() {
@@ -121,23 +132,29 @@ function openPageTransfer() {
 
 onMounted(() => {
   window.addEventListener('keydown', handleConsoleShortcut);
+  document.addEventListener('pointerdown', handleOutsideProjectMenu);
 });
-onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcut));
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleConsoleShortcut);
+  document.removeEventListener('pointerdown', handleOutsideProjectMenu);
+});
 </script>
 
 <template>
-  <div class="candidate-home flex min-h-screen flex-col bg-[#F2F2F7] pt-16 text-on-surface">
-    <nav class="fixed top-0 z-50 w-full border-b border-black/10 bg-white/80 shadow-sm backdrop-blur-xl">
-      <div class="mx-auto flex h-16 max-w-container-max items-center justify-between px-margin-desktop">
+  <div class="candidate-home platform-page flex min-h-screen flex-col pt-16 text-on-surface">
+    <nav class="candidate-topbar platform-material fixed top-0 z-50 w-full">
+      <div
+        class="candidate-topbar__inner mx-auto flex h-16 max-w-container-max items-center justify-between px-margin-desktop"
+      >
         <div class="flex items-center gap-6">
           <RouterLink
             to="/"
-            class="font-headline-md text-headline-md font-bold tracking-tight text-on-surface"
+            class="candidate-brand font-headline-md text-headline-md font-bold tracking-tight text-on-surface"
           >
             原型管理系统
           </RouterLink>
-          <div class="hidden h-full items-center gap-6 pt-1 md:flex">
-            <div class="relative flex h-full items-center">
+          <div class="candidate-primary-nav hidden h-full items-center gap-6 pt-1 md:flex">
+            <div ref="projectMenuRef" class="candidate-project-picker relative flex h-full items-center">
               <button
                 type="button"
                 class="candidate-nav-button flex h-full items-center font-label-md text-label-md transition-colors"
@@ -146,44 +163,56 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
                     ? 'border-b-2 border-primary pb-1 font-medium text-primary'
                     : 'text-on-surface-variant hover:text-on-surface'
                 "
+                aria-haspopup="listbox"
+                :aria-expanded="showProjectMenu"
+                aria-controls="candidate-project-menu"
                 @click="showProjectMenu = !showProjectMenu"
               >
                 项目
               </button>
-              <div
-                v-if="showProjectMenu"
-                class="candidate-project-menu absolute left-1/2 top-[calc(100%+10px)] z-20 w-64 -translate-x-1/2 rounded-xl border border-black/10 bg-white p-2 shadow-xl"
-              >
-                <button
-                  type="button"
-                  class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-[#F2F2F7]"
-                  @click="chooseProject('')"
+              <Transition name="platform-popover">
+                <div
+                  v-if="showProjectMenu"
+                  id="candidate-project-menu"
+                  class="candidate-project-menu platform-popover absolute left-1/2 top-[calc(100%+10px)] z-20 w-64 -translate-x-1/2 rounded-2xl p-2"
+                  role="listbox"
+                  aria-label="选择项目"
                 >
-                  <span>不选择项目</span>
-                  <span
-                    v-if="!hasSelectedProject"
-                    class="material-symbols-outlined text-[18px] text-[#007AFF]"
+                  <button
+                    type="button"
+                    class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-[#F2F2F7]"
+                    role="option"
+                    :aria-selected="!hasSelectedProject"
+                    @click="chooseProject('')"
                   >
-                    check
-                  </span>
-                </button>
-                <div class="my-1 h-px bg-black/5"></div>
-                <button
-                  v-for="project in selectableProjects"
-                  :key="project.id"
-                  type="button"
-                  class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-[#F2F2F7]"
-                  @click="chooseProject(project.id)"
-                >
-                  <span>{{ project.name }}</span>
-                  <span
-                    v-if="project.id === selectedProjectId"
-                    class="material-symbols-outlined text-[18px] text-[#007AFF]"
+                    <span>不选择项目</span>
+                    <span
+                      v-if="!hasSelectedProject"
+                      class="material-symbols-outlined text-[18px] text-[#007AFF]"
+                    >
+                      check
+                    </span>
+                  </button>
+                  <div class="my-1 h-px bg-black/5"></div>
+                  <button
+                    v-for="project in selectableProjects"
+                    :key="project.id"
+                    type="button"
+                    class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-label-md text-label-md text-on-surface transition-colors hover:bg-[#F2F2F7]"
+                    role="option"
+                    :aria-selected="project.id === selectedProjectId"
+                    @click="chooseProject(project.id)"
                   >
-                    check
-                  </span>
-                </button>
-              </div>
+                    <span>{{ project.name }}</span>
+                    <span
+                      v-if="project.id === selectedProjectId"
+                      class="material-symbols-outlined text-[18px] text-[#007AFF]"
+                    >
+                      check
+                    </span>
+                  </button>
+                </div>
+              </Transition>
             </div>
             <RouterLink
               to="/components"
@@ -200,7 +229,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
             </button>
           </div>
         </div>
-        <div class="flex items-center gap-4">
+        <div class="candidate-topbar-actions flex items-center gap-4">
           <RouterLink
             v-if="showConsole"
             to="/tools/console"
@@ -243,8 +272,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
     <main
       class="mx-auto w-full max-w-container-max flex-1 space-y-xl px-margin-mobile py-xl md:px-margin-desktop md:py-xxl"
     >
-      <header class="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+      <header class="home-hero flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
+          <p class="home-eyebrow">PROJECT WORKSPACE</p>
           <div class="mb-2 flex items-center gap-3">
             <span
               class="material-symbols-outlined text-3xl text-primary"
@@ -435,13 +465,33 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
 <style scoped>
 .candidate-home {
   min-height: 100vh;
-  background-color: #f2f2f7;
-  color: #1b1b1d;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(circle at 12% 4%, rgb(var(--app-color-primary-rgb) / 7%), transparent 25rem),
+    var(--platform-color-page);
+  color: var(--platform-color-text);
+}
+
+.candidate-home .candidate-topbar {
+  border-width: 0 0 0.5px;
+  border-color: rgb(0 0 0 / 8%);
+  box-shadow: 0 1px 18px rgb(0 0 0 / 5%);
+}
+
+.candidate-home .candidate-brand {
+  letter-spacing: -0.025em;
+}
+
+.candidate-home .home-eyebrow {
+  margin: 0 0 8px;
+  color: var(--app-color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+}
+
+.candidate-home .home-hero h1 {
+  letter-spacing: -0.035em;
 }
 
 .candidate-home .material-symbols-outlined {
@@ -462,15 +512,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
 
 .candidate-home .premium-card {
   border: 0.5px solid rgb(0 0 0 / 10%);
-  border-radius: 12px;
-  background-color: #fff;
-  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
+  border-radius: var(--platform-radius-surface);
+  background-color: var(--platform-color-surface);
+  box-shadow: var(--platform-shadow-surface);
 }
 
 .candidate-home .candidate-client-card {
   display: flex;
   min-height: 182px;
   flex-direction: column;
+  transition:
+    border-color var(--platform-motion-base) ease,
+    box-shadow var(--platform-motion-base) ease,
+    transform var(--platform-motion-base) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.candidate-home .candidate-client-card:hover {
+  transform: translateY(-2px);
+}
+
+.candidate-home .candidate-client-card:active {
+  transform: scale(0.985);
 }
 
 .candidate-home .candidate-activity-card {
@@ -493,15 +555,78 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleConsoleShortcu
   cursor: pointer;
 }
 
-.candidate-home a,
-.candidate-home button {
-  -webkit-tap-highlight-color: transparent;
+.candidate-home .candidate-project-menu {
+  border-radius: 16px;
+  transform: translateX(-50%);
+  transform-origin: center top;
+}
+
+.candidate-home .candidate-project-menu button {
+  min-height: 40px;
+}
+
+.platform-popover-enter-active,
+.platform-popover-leave-active {
+  transition:
+    opacity var(--platform-motion-base) ease,
+    transform var(--platform-motion-base) cubic-bezier(0.22, 1, 0.36, 1),
+    filter var(--platform-motion-base) ease;
+}
+
+.platform-popover-enter-from,
+.platform-popover-leave-to {
+  opacity: 0;
+  filter: blur(3px);
+  transform: translate(-50%, -6px) scale(0.98);
 }
 
 @media (max-width: 767px) {
+  .candidate-home .candidate-topbar__inner {
+    gap: 12px;
+    padding-inline: 16px;
+  }
+
+  .candidate-home .candidate-brand {
+    font-size: 17px;
+    white-space: nowrap;
+  }
+
+  .candidate-home .candidate-primary-nav {
+    display: flex;
+    gap: 0;
+    padding-top: 0;
+  }
+
+  .candidate-home .candidate-primary-nav > :not(.candidate-project-picker) {
+    display: none;
+  }
+
+  .candidate-home .candidate-project-picker .candidate-nav-button {
+    height: 38px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: rgb(118 118 128 / 10%);
+  }
+
+  .candidate-home .candidate-project-menu {
+    left: 0;
+    width: min(264px, calc(100vw - 32px));
+    transform: none;
+  }
+
+  .candidate-home .candidate-topbar-actions {
+    gap: 10px;
+  }
+
   .candidate-home h1 {
     font-size: 34px;
     line-height: 41px;
+  }
+
+  .platform-popover-enter-from,
+  .platform-popover-leave-to {
+    transform: translateY(-6px) scale(0.98);
   }
 }
 </style>

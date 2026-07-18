@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
-import { Check, Close, Edit, Plus, RefreshRight, Search } from '@element-plus/icons-vue';
+import { ArrowLeft, Check, Close, Edit, Grid, Plus, RefreshRight, Search } from '@element-plus/icons-vue';
 import {
   ContentPanel,
   DataTablePanel,
@@ -109,19 +109,29 @@ function confirmReason() {
 <template>
   <main class="design-system-page">
     <PageLayout class="design-system-shell">
-      <div class="catalog-nav">
-        <RouterLink to="/" class="back-link">返回项目首页</RouterLink>
+      <div class="catalog-nav platform-material">
+        <RouterLink to="/" class="back-link">
+          <el-icon><ArrowLeft /></el-icon>
+          返回项目首页
+        </RouterLink>
         <span>组件规范 v3.1 · 20 个公共组件</span>
       </div>
 
-      <PageHeader
-        title="平台通用组件规范"
-        description="新页面直接复用完整页面结构；历史页面保持稳定，不做批量组件化改写。"
-      >
-        <template #actions>
-          <el-button :icon="Plus" type="primary" size="large" @click="openDialog">新增示例</el-button>
-        </template>
-      </PageHeader>
+      <div class="design-hero">
+        <div class="design-hero__icon"><el-icon><Grid /></el-icon></div>
+        <div class="design-hero__body">
+          <p class="eyebrow">DESIGN SYSTEM</p>
+          <PageHeader
+            class="design-page-header"
+            title="平台通用组件规范"
+            description="新页面直接复用完整页面结构；历史页面保持稳定，不做批量组件化改写。"
+          >
+            <template #actions>
+              <el-button :icon="Plus" type="primary" size="large" @click="openDialog">新增示例</el-button>
+            </template>
+          </PageHeader>
+        </div>
+      </div>
 
       <section class="token-strip" aria-label="设计变量">
         <div>
@@ -388,15 +398,69 @@ function confirmReason() {
   width: min(1180px, 100%);
 }
 .catalog-nav {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 14px;
   color: var(--app-color-text-muted);
   font-size: var(--app-font-size-sm);
 }
 .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--app-color-primary);
   font-weight: 600;
+}
+.design-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-top: 8px;
+}
+.design-hero__icon {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-color-primary) 11%, white);
+  color: var(--app-color-primary);
+  font-size: 22px;
+}
+.design-hero__body {
+  min-width: 0;
+  flex: 1;
+}
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--app-color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.design-page-header {
+  margin-bottom: 0;
+}
+.design-page-header :deep(h1) {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.design-page-header :deep(p) {
+  margin-top: 10px;
+  color: var(--app-color-text-muted);
+  font-size: 15px;
+  line-height: 1.6;
 }
 .token-strip {
   display: grid;
@@ -483,6 +547,29 @@ function confirmReason() {
   }
   .advanced-filter-grid {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .catalog-nav > span {
+    display: none;
+  }
+  .design-hero {
+    gap: 10px;
+  }
+  .design-hero__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+  .design-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .design-page-header :deep(h1) {
+    font-size: 30px;
+  }
+  .design-page-header :deep(.ui-page-header__actions) {
+    width: 100%;
   }
 }
 </style>

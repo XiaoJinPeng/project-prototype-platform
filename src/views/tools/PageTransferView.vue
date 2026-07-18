@@ -1,5 +1,5 @@
 <template>
-  <main class="transfer-page">
+  <main class="transfer-page platform-page">
     <header class="transfer-header tool-hero">
       <div class="tool-hero__main">
         <RouterLink class="back-link" to="/">
@@ -7,7 +7,9 @@
           返回首页
         </RouterLink>
         <div class="tool-title-row">
-          <div class="tool-title-icon"><el-icon><Upload /></el-icon></div>
+          <div class="tool-title-icon">
+            <el-icon><Upload /></el-icon>
+          </div>
           <div>
             <p class="eyebrow">ENGINEERING TOOL</p>
             <h1>页面导入导出</h1>
@@ -48,7 +50,9 @@
         :aria-selected="activeTab === 'import'"
         @click="activeTab = 'import'"
       >
-        <span class="transfer-mode-option__icon"><el-icon><Upload /></el-icon></span>
+        <span class="transfer-mode-option__icon"
+          ><el-icon><Upload /></el-icon
+        ></span>
         <span class="transfer-mode-option__copy">
           <strong>导入 HTML 原型</strong>
           <small>检查模板后登记到项目页面</small>
@@ -63,7 +67,9 @@
         :aria-selected="activeTab === 'export'"
         @click="activeTab = 'export'"
       >
-        <span class="transfer-mode-option__icon"><el-icon><Download /></el-icon></span>
+        <span class="transfer-mode-option__icon"
+          ><el-icon><Download /></el-icon
+        ></span>
         <span class="transfer-mode-option__copy">
           <strong>导出演示包</strong>
           <small>选择页面生成 HTML 或 ZIP</small>
@@ -667,7 +673,7 @@ function reloadProject() {
 
 <style scoped>
 .transfer-page {
-  width: min(1280px, calc(100% - 64px));
+  width: min(var(--platform-content-max), calc(100% - 64px));
   min-height: 100svh;
   margin: 0 auto;
   padding: 40px 0 64px;
@@ -697,7 +703,7 @@ function reloadProject() {
   justify-content: center;
   margin-top: 2px;
   border-radius: 14px;
-  background: #e5f0ff;
+  background: color-mix(in srgb, var(--app-color-primary) 11%, white);
   color: var(--app-color-primary);
   font-size: 22px;
 }
@@ -708,8 +714,9 @@ function reloadProject() {
   padding: 14px 16px;
   border: 0.5px solid rgb(0 0 0 / 8%);
   border-radius: 16px;
-  background: rgb(255 255 255 / 74%);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 4%);
+  background: rgb(255 255 255 / 82%);
+  box-shadow: var(--platform-shadow-surface);
+  backdrop-filter: blur(18px) saturate(145%);
 }
 .context-label,
 .context-note {
@@ -782,8 +789,8 @@ function reloadProject() {
   gap: 12px;
   padding: 14px 16px;
   border: 0.5px solid rgb(0 0 0 / 10%);
-  border-radius: 16px;
-  background: #fff;
+  border-radius: var(--platform-radius-surface);
+  background: var(--platform-color-surface);
   color: var(--app-color-text-primary);
   text-align: left;
   transition:
@@ -803,7 +810,7 @@ function reloadProject() {
 }
 .transfer-mode-option.is-active {
   border-color: rgb(var(--app-color-primary-rgb) / 34%);
-  background: #eaf3ff;
+  background: color-mix(in srgb, var(--app-color-primary) 9%, white);
   box-shadow: 0 8px 24px rgb(0 113 227 / 8%);
 }
 .transfer-mode-option__icon {
@@ -860,9 +867,9 @@ function reloadProject() {
 .tool-panel {
   padding: 28px;
   border: 0.5px solid rgb(0 0 0 / 10%);
-  border-radius: 16px;
-  background: var(--app-color-surface);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 5%);
+  border-radius: var(--platform-radius-surface);
+  background: var(--platform-color-surface);
+  box-shadow: var(--platform-shadow-surface);
 }
 .panel-heading,
 .export-toolbar,
@@ -899,7 +906,7 @@ function reloadProject() {
   gap: 12px;
   margin-bottom: 18px;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #f5f5f7;
   color: var(--app-color-text-secondary);
   font-size: 13px;
