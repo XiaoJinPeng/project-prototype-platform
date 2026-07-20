@@ -9,6 +9,10 @@ const pagePrdLinkModules = import.meta.glob('../../projects/*/page-prd-links.js'
   eager: true,
   import: 'default',
 });
+const pagePrdLinkConfigModules = import.meta.glob('../../projects/*/.platform/page-prd-links.json', {
+  eager: true,
+  import: 'default',
+});
 const packageViewModules = import.meta.glob('../../projects/*/views/**/*.vue');
 const compatibilityViewModules = import.meta.glob('../views/{operation,enterprise}/*.vue');
 
@@ -16,11 +20,31 @@ function projectFolderFromPath(modulePath) {
   return modulePath.match(/\.\.\/\.\.\/projects\/([^/]+)\/project\.json$/)?.[1] || '';
 }
 
+function mergePagePrdLinks(baseLinks, overrideLinks) {
+  const merged = Object.fromEntries(
+    Object.entries(baseLinks || {}).map(([clientId, pages]) => [clientId, { ...(pages || {}) }]),
+  );
+
+  for (const [clientId, pages] of Object.entries(overrideLinks || {})) {
+    if (!pages || typeof pages !== 'object') continue;
+    merged[clientId] ||= {};
+    for (const [pageName, documentPath] of Object.entries(pages)) {
+      if (documentPath === null || documentPath === '') delete merged[clientId][pageName];
+      else merged[clientId][pageName] = documentPath;
+    }
+  }
+
+  return merged;
+}
+
 function normalizeProject(modulePath, manifest) {
   const folder = projectFolderFromPath(modulePath);
   const definitionsModule = definitionModules[`../../projects/${folder}/${manifest.pageDefinitions}`];
   const definitions = definitionsModule?.clientPageDefinitions || definitionsModule?.default;
-  const pagePrdLinks = pagePrdLinkModules[`../../projects/${folder}/page-prd-links.js`] || {};
+  const legacyPagePrdLinks = pagePrdLinkModules[`../../projects/${folder}/page-prd-links.js`] || {};
+  const pagePrdLinkConfig =
+    pagePrdLinkConfigModules[`../../projects/${folder}/.platform/page-prd-links.json`];
+  const pagePrdLinks = mergePagePrdLinks(legacyPagePrdLinks, pagePrdLinkConfig?.links || {});
   if (!folder || folder !== manifest.id || !definitions) return null;
   const clients = (manifest.clients || [])
     .filter((client) => definitions[client.id])

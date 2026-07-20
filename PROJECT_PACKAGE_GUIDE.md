@@ -16,7 +16,9 @@
 projects/{project-id}/
 ├─ project.json                 项目 Manifest
 ├─ page-definitions.js          客户端、菜单和页面登记
-├─ page-prd-links.js            原型页面与 PRD 文件关联
+├─ page-prd-links.js            历史兼容：原型页面与 PRD 文件关联
+├─ .platform/
+│  └─ page-prd-links.json       页面级 PRD 文件关联配置（工具页维护）
 ├─ views/{client-id}/           项目专属 Vue 页面
 ├─ assets/                      Logo、登录背景和项目图片
 ├─ data/                        可选的项目级模拟数据
@@ -63,7 +65,7 @@ npm run audit:projects
 - `pages`：路由片段、页面名、标题、Vue 文件、菜单分组和图标。
 - `// <generator:{client-id}-pages>`：页面生成器和 HTML 导入工具的写入位置。
 
-开发模式下，页面对应的 PRD 在项目包的 `page-prd-links.js` 中维护，按客户端和页面名称关联文档相对路径。页面进入统一内部外壳后，可在不离开原型的情况下查看对应 PRD；没有登记关联文档的页面不显示 PRD 入口。
+开发模式下，页面对应的 PRD 在项目包 `.platform/page-prd-links.json` 中维护，按客户端和页面名称关联项目 `docs` 目录下的 Markdown 文件。可进入“路由菜单管理”，在页面列表中点击“关联 PRD”完成选择、修改和清除；历史项目中的 `page-prd-links.js` 仍作为兼容读取来源。页面进入统一内部外壳后，可在不离开原型的情况下查看对应 PRD；没有登记关联文档的页面不显示 PRD 入口。
 
 正式路由由外壳自动生成：
 

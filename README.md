@@ -136,7 +136,7 @@ npm run generate:page -- --project sample-project --client admin --path vehicle-
 
 开发模式用于 PM、开发人员和内部评审。开启后，已登记 PRD 关联的业务页面会在统一外壳顶栏显示“查看 PRD”，默认以固定分屏方式同时查看原型和 PRD；也可以切换为浮层或新窗口。PRD 面板还可以下载当前页面对应的 Vue 源文件，便于开发人员辅助定位；该下载接口仅在本机 Vite 开发服务中开放。客户演示时保持关闭，不显示开发信息。
 
-页面与 PRD 的对应关系保存在各项目包的 `page-prd-links.js`。没有关联 PRD 的页面不会显示入口。开发模式可以在 `/tools/console` 开启，也可以通过业务页面 URL 的 `?__dev=1` 开启当前浏览器会话。
+页面与 PRD 文件的对应关系保存在项目包 `.platform/page-prd-links.json`，可在“路由菜单管理”的页面列表中直接选择、修改或清除；历史项目中的 `page-prd-links.js` 仍作为兼容读取来源。没有关联 PRD 的页面不会显示入口。开发模式可以在 `/tools/console` 开启，也可以通过业务页面 URL 的 `?__dev=1` 开启当前浏览器会话。
 
 业务页面开发模式状态保存在工程根目录的 `platform-settings.json`，该文件已加入 `.gitignore`，只作为当前服务实例的本地配置。本机通过 Vite 开发服务保存配置，局域网访问者读取同一份配置，刷新后即可看到 PRD 和源文件入口。静态生产包只能读取构建时写入的 `platform-settings.json` 快照，不能在线修改；需要修改时应更新配置后重新构建发布。首页控制台及首页管理工具仍只保存在当前浏览器的 `sessionStorage`，不写入配置文件；`?__dev=1` 仅作为当前浏览器的临时开发模式覆盖，不会修改共享配置。
 

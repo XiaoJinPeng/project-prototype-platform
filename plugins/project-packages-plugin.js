@@ -392,6 +392,41 @@ function normalizePrdBindingsPayload(projectId, payload) {
   };
 }
 
+function normalizePagePrdLinksPayload(projectId, payload) {
+  const source = payload?.links && typeof payload.links === 'object' ? payload.links : {};
+  const links = {};
+
+  for (const [clientId, pages] of Object.entries(source)) {
+    if (!PROJECT_ID_PATTERN.test(clientId) || !pages || typeof pages !== 'object') continue;
+    for (const [pageName, value] of Object.entries(pages)) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(pageName)) continue;
+      if (value === null || value === '') {
+        links[clientId] ||= {};
+        links[clientId][pageName] = null;
+        continue;
+      }
+      const documentPath = typeof value === 'string' ? value.trim() : String(value?.path || '').trim();
+      if (!documentPath || !isSafeRelativePath(documentPath) || !/\.md$/i.test(documentPath)) {
+        throw new Error(`页面 ${clientId}/${pageName} 的 PRD 路径无效。`);
+      }
+      links[clientId] ||= {};
+      links[clientId][pageName] = documentPath;
+    }
+  }
+
+  return { schemaVersion: 1, projectId, links };
+}
+
+async function readPagePrdLinksFile(projectRoot, projectId) {
+  const filePath = path.join(projectRoot, '.platform', 'page-prd-links.json');
+  try {
+    return normalizePagePrdLinksPayload(projectId, JSON.parse(await fs.readFile(filePath, 'utf8')));
+  } catch (error) {
+    if (error.code === 'ENOENT') return normalizePagePrdLinksPayload(projectId, {});
+    throw error;
+  }
+}
+
 async function readPrdBindingsFile(projectRoot, projectId) {
   const filePath = path.join(projectRoot, '.platform', 'prd-bindings.json');
   try {
@@ -708,9 +743,17 @@ export function projectPackagesPlugin({ projectsRoot }) {
           const relativePath = toWebPath(path.relative(root, absolutePath));
           const bindingChange = /^([a-z][a-z0-9-]*)\/\.platform\/prd-bindings\.json$/i.exec(relativePath);
           if (bindingChange) {
-            server.ws.send({ type: 'custom', event: 'prd-bindings:changed', data: { projectId: bindingChange[1] } });
+            server.ws.send({
+              type: 'custom',
+              event: 'prd-bindings:changed',
+              data: { projectId: bindingChange[1] },
+            });
           }
-          if (/project\.json$|page-definitions\.js$|[\\/]views[\\/].+\.vue$/i.test(absolutePath)) {
+          if (
+            /project\.json$|page-definitions\.js$|[\\/]views[\\/].+\.vue$|[\\/]\.platform[\\/]page-prd-links\.json$/i.test(
+              absolutePath,
+            )
+          ) {
             server.ws.send({ type: 'full-reload' });
           }
         }, 120);
@@ -753,6 +796,44 @@ export function projectPackagesPlugin({ projectsRoot }) {
             sendJson(res, payload);
           } catch (error) {
             sendJson(res, { message: 'PRD 关联配置保存失败。', detail: error.message }, 400);
+          }
+          return;
+        }
+        if (requestUrl.pathname === '/__projects/page-prd-links') {
+          const projectId = requestUrl.searchParams.get('project') || '';
+          if (!PROJECT_ID_PATTERN.test(projectId)) {
+            sendJson(res, { message: '项目 ID 无效。' }, 400);
+            return;
+          }
+          const projectRoot = path.join(root, projectId);
+          if (req.method === 'GET') {
+            try {
+              sendJson(res, await readPagePrdLinksFile(projectRoot, projectId));
+            } catch (error) {
+              sendJson(res, { message: '页面 PRD 关联配置读取失败。', detail: error.message }, 500);
+            }
+            return;
+          }
+          if (req.method !== 'POST') {
+            res.statusCode = 405;
+            res.setHeader('Allow', 'GET, POST');
+            sendJson(res, { message: '页面 PRD 关联配置只支持 GET 或 POST。' }, 405);
+            return;
+          }
+          if (!isLocalRequest(req)) {
+            sendJson(res, { message: '页面 PRD 关联编辑仅允许本机开发环境使用。' }, 403);
+            return;
+          }
+          try {
+            const body = await readJsonBody(req);
+            const payload = normalizePagePrdLinksPayload(projectId, body);
+            const filePath = path.join(projectRoot, '.platform', 'page-prd-links.json');
+            await fs.mkdir(path.dirname(filePath), { recursive: true });
+            await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+            server.ws.send({ type: 'custom', event: 'page-prd-links:changed', data: { projectId } });
+            sendJson(res, payload);
+          } catch (error) {
+            sendJson(res, { message: '页面 PRD 关联配置保存失败。', detail: error.message }, 400);
           }
           return;
         }

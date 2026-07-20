@@ -107,6 +107,17 @@
               <template #default="{ row }">{{ sectionTitle(client, row.section) }}</template>
             </el-table-column>
             <el-table-column prop="view" label="页面文件" min-width="280" />
+            <el-table-column label="PRD 文件" min-width="250">
+              <template #default="{ row }">
+                <div v-if="pagePrdLinkFor(client.id, row.name)" class="route-prd-cell">
+                  <el-tag size="small" type="success">已关联</el-tag>
+                  <span :title="pagePrdLinkFor(client.id, row.name)">
+                    {{ pagePrdLinkTitle(pagePrdLinkFor(client.id, row.name)) }}
+                  </span>
+                </div>
+                <el-tag v-else size="small" type="info">未关联</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="来源" width="120">
               <template #default="{ row }">
                 <el-tag size="small" :type="row.source === 'html-template' ? 'success' : 'info'">
@@ -114,9 +125,18 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="150" fixed="right">
+            <el-table-column label="操作" width="230" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openEditRoute(client, row)">编辑</el-button>
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="!canEditPagePrd"
+                  :title="canEditPagePrd ? '配置整页 PRD 文件' : '生产构建只能查看页面关联'"
+                  @click="openPagePrdLink(client, row)"
+                >
+                  {{ pagePrdLinkFor(client.id, row.name) ? '编辑 PRD' : '关联 PRD' }}
+                </el-button>
                 <el-button link type="danger" @click="deleteRoute(client, row)">删除</el-button>
               </template>
             </el-table-column>
@@ -210,6 +230,66 @@
         </el-table-column>
       </el-table>
     </section>
+
+    <el-dialog
+      v-model="prdLinkDialogVisible"
+      title="关联页面 PRD"
+      width="620px"
+      destroy-on-close
+      :close-on-click-modal="false"
+      class="route-editor-dialog apple-tool-dialog"
+      modal-class="apple-tool-overlay"
+    >
+      <div class="dialog-intro">
+        <span class="dialog-intro__icon"
+          ><el-icon><Document /></el-icon
+        ></span>
+        <div>
+          <strong>为整个页面指定 PRD 文件</strong>
+          <p>页面进入开发模式后，顶部“查看 PRD”会打开这份文档。</p>
+        </div>
+      </div>
+      <div class="prd-link-target">
+        <span>{{ prdLinkContext.clientName }} · {{ prdLinkContext.pageTitle }}</span>
+        <code>{{ prdLinkContext.fullPath }}</code>
+      </div>
+      <el-form label-position="top" class="route-dialog-form">
+        <el-form-item label="PRD 文件">
+          <el-select
+            v-model="prdLinkDraft"
+            class="prd-link-select"
+            filterable
+            clearable
+            :loading="prdDocumentsLoading"
+            placeholder="选择项目 docs 中的 Markdown 文件"
+          >
+            <el-option
+              v-for="document in prdDocuments"
+              :key="document.path"
+              :label="`${document.title} · ${document.path}`"
+              :value="document.path"
+            />
+          </el-select>
+          <div class="form-help">清空后保存即可取消整页 PRD 关联，不会删除文档。</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="apple-dialog-footer">
+          <span>只写入项目包 .platform 配置，不修改页面源码和 PRD 内容。</span>
+          <div>
+            <el-button @click="prdLinkDialogVisible = false">取消</el-button>
+            <el-button
+              type="primary"
+              :loading="prdLinkSaving"
+              :disabled="!canEditPagePrd"
+              @click="savePagePrdLink"
+            >
+              保存关联
+            </el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
 
     <el-dialog
       v-model="dialogVisible"
@@ -322,9 +402,11 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { ArrowLeft, ArrowRight, Edit, Menu, Plus, Refresh } from '@element-plus/icons-vue';
+import { ArrowLeft, ArrowRight, Document, Edit, Menu, Plus, Refresh } from '@element-plus/icons-vue';
 
-import { installedProjects } from '../../config/project-packages';
+import { getProject, installedProjects } from '../../config/project-packages';
+import { loadDocumentManifest } from '../../services/prd-documents';
+import { loadPagePrdLinks, savePagePrdLinks } from '../../services/page-prd-links';
 
 const selectedProjectId = ref(installedProjects[0]?.id || '');
 const activeClientId = ref('');
@@ -338,6 +420,20 @@ const sectionDialogVisible = ref(false);
 const sectionSaving = ref(false);
 const sectionClientId = ref('');
 const sectionDraft = ref([]);
+const pagePrdLinks = ref({});
+const pagePrdLinkOverrides = ref({});
+const prdLinkDialogVisible = ref(false);
+const prdLinkSaving = ref(false);
+const prdDocumentsLoading = ref(false);
+const prdDocuments = ref([]);
+const prdLinkDraft = ref('');
+const prdLinkContext = reactive({
+  clientId: '',
+  clientName: '',
+  pageName: '',
+  pageTitle: '',
+  fullPath: '',
+});
 const routeForm = reactive({
   client: '',
   originalPath: '',
@@ -371,8 +467,53 @@ const iconOptions = [
 const selectedRouteClient = computed(
   () => routeData.value?.clients.find((client) => client.id === routeForm.client) || null,
 );
+const selectedProject = computed(() => getProject(selectedProjectId.value));
+const canEditPagePrd = import.meta.env.DEV;
 
-watch(selectedProjectId, () => loadRoutes(), { immediate: true });
+watch(
+  selectedProjectId,
+  () => {
+    prdDocuments.value = [];
+    pagePrdLinks.value = {};
+    pagePrdLinkOverrides.value = {};
+    void loadRoutes();
+  },
+  { immediate: true },
+);
+
+function clonePagePrdLinks(source) {
+  return Object.fromEntries(
+    Object.entries(source || {}).map(([clientId, pages]) => [clientId, { ...(pages || {}) }]),
+  );
+}
+
+function mergePagePrdLinks(baseLinks, overrideLinks) {
+  const merged = clonePagePrdLinks(baseLinks);
+  for (const [clientId, pages] of Object.entries(overrideLinks || {})) {
+    if (!pages || typeof pages !== 'object') continue;
+    merged[clientId] ||= {};
+    for (const [pageName, documentPath] of Object.entries(pages)) {
+      if (documentPath === null || documentPath === '') delete merged[clientId][pageName];
+      else merged[clientId][pageName] = documentPath;
+    }
+  }
+  return merged;
+}
+
+function pagePrdLinkFor(clientId, pageName) {
+  const value = pagePrdLinks.value?.[clientId]?.[pageName];
+  if (typeof value === 'string') return value;
+  return value?.path || value?.file || '';
+}
+
+function pagePrdLinkTitle(documentPath) {
+  return (
+    String(documentPath || '')
+      .split('/')
+      .at(-1)
+      ?.replace(/\.md$/i, '') || '已关联 PRD'
+  );
+}
 
 async function loadRoutes() {
   if (!selectedProjectId.value) {
@@ -382,15 +523,17 @@ async function loadRoutes() {
   loading.value = true;
   error.value = '';
   try {
-    const response = await fetch(
-      `/__page-transfer/routes?projectId=${encodeURIComponent(selectedProjectId.value)}`,
-      {
+    const [response, externalLinks] = await Promise.all([
+      fetch(`/__page-transfer/routes?projectId=${encodeURIComponent(selectedProjectId.value)}`, {
         cache: 'no-store',
-      },
-    );
+      }),
+      loadPagePrdLinks(selectedProjectId.value),
+    ]);
     const payload = await response.json();
     if (!response.ok || !payload.ok) throw new Error(payload.error || '路由读取失败。');
     routeData.value = payload;
+    pagePrdLinkOverrides.value = externalLinks;
+    pagePrdLinks.value = mergePagePrdLinks(selectedProject.value?.pagePrdLinks, externalLinks);
     if (!routeData.value.clients.some((client) => client.id === activeClientId.value)) {
       activeClientId.value = routeData.value.clients[0]?.id || '';
     }
@@ -399,6 +542,61 @@ async function loadRoutes() {
     error.value = loadError.message;
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadPrdDocuments() {
+  if (prdDocuments.value.length || !selectedProjectId.value) return;
+  prdDocumentsLoading.value = true;
+  try {
+    const manifest = await loadDocumentManifest(selectedProjectId.value);
+    prdDocuments.value = manifest.documents || [];
+  } catch (loadError) {
+    ElMessage.error(loadError.message || 'PRD 文档读取失败。');
+  } finally {
+    prdDocumentsLoading.value = false;
+  }
+}
+
+function openPagePrdLink(client, page) {
+  Object.assign(prdLinkContext, {
+    clientId: client.id,
+    clientName: client.name,
+    pageName: page.name,
+    pageTitle: page.title,
+    fullPath: `${client.basePath}/${page.path}`,
+  });
+  prdLinkDraft.value = pagePrdLinkFor(client.id, page.name);
+  prdLinkDialogVisible.value = true;
+  void loadPrdDocuments();
+}
+
+function updateNestedPagePrdLink(source, clientId, pageName, value) {
+  const next = clonePagePrdLinks(source);
+  next[clientId] ||= {};
+  next[clientId][pageName] = value;
+  return next;
+}
+
+async function savePagePrdLink() {
+  if (!prdLinkContext.clientId || !prdLinkContext.pageName) return;
+  prdLinkSaving.value = true;
+  try {
+    const nextOverrides = updateNestedPagePrdLink(
+      pagePrdLinkOverrides.value,
+      prdLinkContext.clientId,
+      prdLinkContext.pageName,
+      prdLinkDraft.value || null,
+    );
+    const saved = await savePagePrdLinks(selectedProjectId.value, nextOverrides);
+    pagePrdLinkOverrides.value = saved;
+    pagePrdLinks.value = mergePagePrdLinks(selectedProject.value?.pagePrdLinks, saved);
+    prdLinkDialogVisible.value = false;
+    ElMessage.success('页面 PRD 关联已保存，页面将自动重新载入。');
+  } catch (saveError) {
+    ElMessage.error(saveError.message || '页面 PRD 关联保存失败。');
+  } finally {
+    prdLinkSaving.value = false;
   }
 }
 
@@ -865,6 +1063,19 @@ async function restoreSectionBackup(backup) {
 .route-table {
   width: 100%;
 }
+.route-prd-cell {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.route-prd-cell span {
+  overflow: hidden;
+  color: var(--app-color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .routes-panel :deep(.el-table) {
   overflow: hidden;
   border-radius: 12px;
@@ -924,6 +1135,31 @@ async function restoreSectionBackup(backup) {
 }
 .route-dialog-form {
   padding-top: 2px;
+}
+.prd-link-target {
+  display: grid;
+  gap: 5px;
+  margin: -4px 0 20px;
+  padding: 12px 14px;
+  border: 0.5px solid rgb(0 0 0 / 8%);
+  border-radius: 12px;
+  background: #f5f5f7;
+}
+.prd-link-target span {
+  color: var(--app-color-text-primary);
+  font-size: 14px;
+  font-weight: 650;
+}
+.prd-link-target code {
+  overflow: hidden;
+  color: var(--app-color-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prd-link-select {
+  width: 100%;
 }
 .section-editor-heading {
   display: flex;
