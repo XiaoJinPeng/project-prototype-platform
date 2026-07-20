@@ -1,9 +1,9 @@
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="shellClasses">
     <aside class="app-sidebar">
       <div class="sidebar-brand">
-        <div class="brand-box">
-          <span>{{ appName }}</span>
+        <div class="brand-box" :title="appName">
+          <span :data-initial="appName.slice(0, 1)">{{ appName }}</span>
           <small>{{ translatedClientName }}</small>
         </div>
       </div>
@@ -17,13 +17,21 @@
               :href="exportFileFor(item.path)"
               class="side-link"
               :class="{ 'router-link-active': route.path === item.path }"
+              :title="sidebarCollapsed ? translateStaticCopy(item.label, currentLocale) : undefined"
+              @click="handleSidebarNavigate"
             >
               <el-icon>
                 <component :is="item.icon" />
               </el-icon>
               <span>{{ translateStaticCopy(item.label, currentLocale) }}</span>
             </a>
-            <RouterLink v-else :to="item.path" class="side-link">
+            <RouterLink
+              v-else
+              :to="item.path"
+              class="side-link"
+              :title="sidebarCollapsed ? translateStaticCopy(item.label, currentLocale) : undefined"
+              @click="handleSidebarNavigate"
+            >
               <el-icon>
                 <component :is="item.icon" />
               </el-icon>
@@ -33,9 +41,28 @@
         </template>
       </nav>
     </aside>
+    <button
+      v-if="mobileSidebarOpen"
+      type="button"
+      class="sidebar-scrim"
+      aria-label="关闭菜单"
+      @click="closeMobileSidebar"
+    ></button>
 
     <div class="app-main">
       <header class="topbar">
+        <button
+          type="button"
+          class="sidebar-toggle"
+          :aria-expanded="isNarrowViewport ? mobileSidebarOpen : !sidebarCollapsed"
+          :aria-label="isNarrowViewport ? '打开菜单' : sidebarCollapsed ? '展开侧栏' : '收缩侧栏'"
+          :title="isNarrowViewport ? '打开菜单' : sidebarCollapsed ? '展开侧栏' : '收缩侧栏'"
+          @click="toggleSidebar"
+        >
+          <el-icon>
+            <component :is="isNarrowViewport ? Menu : sidebarCollapsed ? Expand : Fold" />
+          </el-icon>
+        </button>
         <div class="breadcrumb">
           {{ t('common.home') }} / {{ translatedClientName }} / {{ translatedCurrentTitle }}
         </div>
@@ -84,6 +111,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item @click="logout">{{ t('common.logout') }}</el-dropdown-item>
+                <el-dropdown-item divided @click="goHome">回到首页</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -121,7 +149,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Document, Download } from '@element-plus/icons-vue';
+import { Document, Download, Expand, Fold, Menu } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import PrdAssociationLayer from './PrdAssociationLayer.vue';
 import { useI18n } from 'vue-i18n';
@@ -176,6 +204,14 @@ const developerMode = computed(() => platformSettings.developerMode || developer
 const prdPanelOpen = ref(false);
 const prdTarget = ref(null);
 const prdLayoutMode = ref('split');
+const sidebarCollapsed = ref(false);
+const mobileSidebarOpen = ref(false);
+const isNarrowViewport = ref(false);
+const sidebarStorageKey = computed(() => `platform-sidebar-collapsed:${props.projectId}`);
+const shellClasses = computed(() => ({
+  'sidebar-collapsed': sidebarCollapsed.value && !isNarrowViewport.value,
+  'sidebar-drawer-open': mobileSidebarOpen.value,
+}));
 
 const currentTitle = computed(() => route.meta.title || route.name || '工作台');
 function normalizePrdDocument(entry) {
@@ -214,6 +250,7 @@ watch(
   () => route.fullPath,
   () => {
     prdTarget.value = null;
+    closeMobileSidebar();
     if (!prdDocumentPath.value) prdPanelOpen.value = false;
   },
 );
@@ -263,6 +300,10 @@ function logout() {
   router.push(`/p/${props.projectId}/${props.client}/login`);
 }
 
+function goHome() {
+  router.push({ name: 'home' });
+}
+
 async function setDeveloperMode(enabled) {
   if (!canPersistPlatformSettings) return;
 
@@ -289,6 +330,50 @@ function closePrdPanel() {
   prdTarget.value = null;
 }
 
+function loadSidebarPreference() {
+  try {
+    sidebarCollapsed.value = window.localStorage.getItem(sidebarStorageKey.value) === '1';
+  } catch {
+    sidebarCollapsed.value = false;
+  }
+}
+
+function saveSidebarPreference() {
+  try {
+    window.localStorage.setItem(sidebarStorageKey.value, sidebarCollapsed.value ? '1' : '0');
+  } catch {
+    // Sidebar state is a local convenience and does not affect the project package.
+  }
+}
+
+function updateViewportMode() {
+  const narrow = window.matchMedia?.('(max-width: 760px)').matches ?? window.innerWidth <= 760;
+  isNarrowViewport.value = narrow;
+  if (!narrow) mobileSidebarOpen.value = false;
+}
+
+function toggleSidebar() {
+  if (isNarrowViewport.value) {
+    mobileSidebarOpen.value = !mobileSidebarOpen.value;
+    return;
+  }
+
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  saveSidebarPreference();
+}
+
+function closeMobileSidebar() {
+  if (isNarrowViewport.value) mobileSidebarOpen.value = false;
+}
+
+function handleSidebarNavigate() {
+  closeMobileSidebar();
+}
+
+function handleSidebarEscape(event) {
+  if (event.key === 'Escape') closeMobileSidebar();
+}
+
 async function handleSourceDownload() {
   try {
     await downloadProjectSource(props.projectId, sourcePath.value);
@@ -310,11 +395,17 @@ function handleDeveloperShortcut(event) {
 
 onMounted(() => {
   void loadPlatformSettings();
+  loadSidebarPreference();
+  updateViewportMode();
   window.addEventListener('keydown', handleDeveloperShortcut);
+  window.addEventListener('resize', updateViewportMode);
+  document.addEventListener('keydown', handleSidebarEscape);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleDeveloperShortcut);
+  window.removeEventListener('resize', updateViewportMode);
+  document.removeEventListener('keydown', handleSidebarEscape);
 });
 
 function exportFileFor(routePath) {

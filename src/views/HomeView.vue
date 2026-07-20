@@ -9,6 +9,7 @@ const router = useRouter();
 const showProjectMenu = ref(false);
 const projectMenuRef = ref(null);
 const consoleVisibilityKey = 'project-platform:home-engineering-tools';
+const selectedProjectStorageKey = 'project-platform:home-selected-project';
 const showConsole = ref(window.sessionStorage.getItem(consoleVisibilityKey) === 'true');
 
 const selectableProjects = computed(() =>
@@ -18,10 +19,27 @@ const selectableProjects = computed(() =>
 const selectedProjectId = computed({
   get() {
     const queryProject = typeof route.query.project === 'string' ? route.query.project : '';
-    return getProject(queryProject)?.id || '';
+    if (getProject(queryProject)?.id) return getProject(queryProject).id;
+
+    try {
+      const rememberedProject = window.localStorage.getItem(selectedProjectStorageKey) || '';
+      return getProject(rememberedProject)?.id || '';
+    } catch {
+      return '';
+    }
   },
   set(projectId) {
-    router.replace({ name: 'home', query: projectId ? { project: projectId } : {} });
+    const normalizedProjectId = getProject(projectId)?.id || '';
+    try {
+      if (normalizedProjectId) {
+        window.localStorage.setItem(selectedProjectStorageKey, normalizedProjectId);
+      } else {
+        window.localStorage.removeItem(selectedProjectStorageKey);
+      }
+    } catch {
+      // Local storage is optional; URL selection still works for the current session.
+    }
+    router.replace({ name: 'home', query: normalizedProjectId ? { project: normalizedProjectId } : {} });
   },
 });
 
@@ -237,6 +255,8 @@ onBeforeUnmount(() => {
           >
             控制台
           </RouterLink>
+          <!-- 临时隐藏：新建项目入口，后续需要恢复时取消本段注释。 -->
+          <!--
           <RouterLink
             v-if="showConsole"
             to="/tools/projects"
@@ -244,6 +264,9 @@ onBeforeUnmount(() => {
           >
             新建项目
           </RouterLink>
+          -->
+          <!-- 临时隐藏：通知铃铛和账户头像，后续需要恢复时取消本段注释。 -->
+          <!--
           <div class="flex items-center gap-3 text-on-surface-variant">
             <button
               type="button"
@@ -265,6 +288,7 @@ onBeforeUnmount(() => {
               >
             </button>
           </div>
+          -->
         </div>
       </div>
     </nav>

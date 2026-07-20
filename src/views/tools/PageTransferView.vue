@@ -378,11 +378,14 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { ArrowLeft, CircleCheck, CircleClose, Download, Upload } from '@element-plus/icons-vue';
 import { ElMessageBox } from 'element-plus';
+import { useRoute } from 'vue-router';
 
 import { getProject, installedProjects } from '../../config/project-packages';
 
+const route = useRoute();
 const activeTab = ref('import');
-const selectedProjectId = ref(installedProjects[0]?.id || '');
+const routeProjectId = typeof route.query.project === 'string' ? route.query.project : '';
+const selectedProjectId = ref(getProject(routeProjectId)?.id || installedProjects[0]?.id || '');
 const sourceFile = ref(null);
 const sourceHtml = ref('');
 const inspection = ref(null);
