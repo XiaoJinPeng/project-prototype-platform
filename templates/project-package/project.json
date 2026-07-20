@@ -50,6 +50,11 @@
     "enabled": true,
     "root": "docs"
   },
+  "prototype": {
+    "enabled": false,
+    "root": "prototype",
+    "clients": {}
+  },
   "mobile": {
     "enabled": false
   },

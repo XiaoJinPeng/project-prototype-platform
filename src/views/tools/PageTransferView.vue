@@ -454,8 +454,8 @@ const exportGroups = computed(() => {
       return {
         client: client.id,
         clientName: client.name,
-        pages: definition.pages
-          .filter((page) => page.menu !== false)
+          pages: definition.pages
+          .filter((page) => page.menu !== false && page.sourceType !== 'html-direct')
           .map((page) => ({
             ...page,
             fullPath: `/p/${selectedProjectId.value}/${client.id}/${page.path}`,

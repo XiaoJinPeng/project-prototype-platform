@@ -117,8 +117,43 @@
         </template>
       </main>
 
-      <nav v-if="headings.length" class="docs-outline" :aria-label="t('docs.outline')">
-        <strong>{{ t('docs.outline') }}</strong>
+      <nav
+        v-if="!embedded && (headings.length || associatedPages.length)"
+        class="docs-outline"
+        :aria-label="t('docs.outline')"
+      >
+        <section v-if="associatedPages.length" class="docs-related-pages" aria-label="关联页面">
+          <div class="docs-related-pages__heading">
+            <strong>关联页面</strong>
+            <button
+              type="button"
+              class="docs-related-pages__toggle"
+              :aria-expanded="relatedPagesExpanded"
+              aria-label="展开或收起关联页面"
+              @click="relatedPagesExpanded = !relatedPagesExpanded"
+            >
+              <span>{{ associatedPages.length }}</span>
+              <el-icon :class="{ 'is-open': relatedPagesExpanded }"><ArrowDown /></el-icon>
+            </button>
+          </div>
+          <div v-if="relatedPagesExpanded" class="docs-related-pages__list">
+            <button
+              v-for="page in associatedPages"
+              :key="page.id"
+              type="button"
+              class="docs-related-page"
+              :title="`${page.clientName} / ${page.title}`"
+              @click="openAssociatedPage(page)"
+            >
+              <el-icon><ArrowRight /></el-icon>
+              <span>
+                <strong>{{ page.title }}</strong>
+                <small>{{ page.clientName }}</small>
+              </span>
+            </button>
+          </div>
+        </section>
+        <strong v-if="headings.length">{{ t('docs.outline') }}</strong>
         <button
           v-for="heading in headings"
           :key="heading.id"
@@ -178,7 +213,9 @@ import { useRoute, useRouter } from 'vue-router';
 import MarkdownIt from 'markdown-it';
 import DOMPurify from 'dompurify';
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowRight,
   Document,
   Folder,
   Loading,
@@ -226,6 +263,7 @@ const readerScrollRef = ref(null);
 const articleRef = ref(null);
 const activeHeadingId = ref('');
 const mobileDirectoryVisible = ref(false);
+const relatedPagesExpanded = ref(false);
 const imagePreviewVisible = ref(false);
 const previewImageUrl = ref('');
 const previewImageAlt = ref('');
@@ -300,6 +338,25 @@ const formattedUpdatedAt = computed(() => {
     minute: '2-digit',
   }).format(new Date(currentDocument.value.updatedAt));
 });
+const associatedPages = computed(() => {
+  const documentPath = normalizeDocumentPath(currentDocument.value?.path);
+  if (!documentPath) return [];
+  const pages = [];
+  for (const client of project.value?.clients || []) {
+    for (const page of client.definition?.pages || []) {
+      const rawLink = project.value?.pagePrdLinks?.[client.id]?.[page.name];
+      const linkedDocument = typeof rawLink === 'string' ? rawLink : rawLink?.path || rawLink?.file || '';
+      if (normalizeDocumentPath(linkedDocument) !== documentPath) continue;
+      pages.push({
+        id: `${client.id}:${page.name}`,
+        title: page.title,
+        clientName: client.name,
+        route: `/p/${props.projectId}/${client.id}/${page.path}`,
+      });
+    }
+  }
+  return pages;
+});
 
 function filterTreeNode(keyword, data) {
   if (!keyword) return true;
@@ -314,6 +371,12 @@ function syncTreeFilter() {
 }
 
 watch(searchKeyword, () => nextTick(syncTreeFilter));
+watch(
+  () => currentDocument.value?.path,
+  () => {
+    relatedPagesExpanded.value = false;
+  },
+);
 
 function handleTreeNodeClick(data) {
   if (data.kind !== 'document') return;
@@ -329,6 +392,10 @@ function openDocument(documentPath, replace = false) {
   }
   const method = replace ? router.replace : router.push;
   method({ path: route.path, query: { file: documentPath } });
+}
+
+function openAssociatedPage(page) {
+  router.push(page.route);
 }
 
 async function refreshManifest(preserveSelection = true) {
@@ -462,6 +529,8 @@ async function loadCurrentDocument() {
     const source = await loadDocument(props.projectId, currentDocument.value.path);
     if (renderId !== activeRenderId) return;
     renderedHtml.value = prepareRenderedHtml(source, currentDocument.value.path);
+    // 文章节点由 documentLoading 控制显示；先让它挂载，再让 Mermaid 查询代码块并替换为 SVG。
+    documentLoading.value = false;
     await nextTick();
     scrollToDocumentAnchor(requestedDocumentAnchor.value);
     readerScrollRef.value?.scrollTo({ top: 0 });
@@ -971,6 +1040,86 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 28px rgb(0 0 0 / 5%);
   backdrop-filter: blur(18px) saturate(140%);
 }
+.docs-related-pages {
+  margin: -2px 0 20px;
+  padding: 0 0 16px;
+  border-bottom: 0.5px solid rgb(0 0 0 / 9%);
+}
+.docs-related-pages__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 8px 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--docs-primary);
+}
+.docs-related-pages__heading strong {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.docs-related-pages__heading span {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--docs-primary);
+  background: color-mix(in srgb, var(--docs-primary) 10%, white);
+  font-size: 11px;
+  text-align: center;
+}
+.docs-related-page {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-height: 40px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--docs-secondary);
+  background: transparent;
+  text-align: left;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    transform 120ms ease;
+}
+.docs-related-page:hover {
+  color: var(--docs-primary);
+  background: rgb(118 118 128 / 10%);
+}
+.docs-related-page:active {
+  transform: scale(0.985);
+}
+.docs-related-page > .el-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--docs-primary);
+}
+.docs-related-page > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.docs-related-page strong,
+.docs-related-page small {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.docs-related-page strong {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.docs-related-page small {
+  color: var(--docs-tertiary);
+  font-size: 11px;
+}
 .docs-outline strong {
   display: block;
   margin: 0 8px 14px;
@@ -1015,6 +1164,36 @@ onBeforeUnmount(() => {
 .docs-outline .outline-level-3 {
   padding-left: 30px;
   color: var(--docs-tertiary);
+}
+.docs-outline .docs-related-pages__heading strong {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.docs-outline button.docs-related-page {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-height: 40px;
+  padding: 7px 8px;
+  line-height: 1.45;
+}
+.docs-outline button.docs-related-pages__toggle {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 8px;
+  text-align: center;
+}
+.docs-related-pages__toggle .el-icon {
+  color: var(--docs-tertiary);
+  transition: transform 160ms ease;
+}
+.docs-related-pages__toggle .el-icon.is-open {
+  transform: rotate(180deg);
 }
 .mobile-directory-button {
   display: none;

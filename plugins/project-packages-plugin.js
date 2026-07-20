@@ -144,11 +144,28 @@ async function validateProjectResources(manifest, projectRoot) {
   }
   if (manifest.docs?.enabled) {
     const docsRoot = path.resolve(projectRoot, manifest.docs.root || 'docs');
-    if (!isInsideRoot(projectRoot, docsRoot) && docsRoot !== projectRoot) {
-      errors.push('文档目录必须位于项目包内。');
-    }
     if (!(await fileExists(docsRoot, 'directory')))
       errors.push(`文档目录不存在：${manifest.docs.root || 'docs'}。`);
+  }
+  if (manifest.prototype?.enabled) {
+    const configuredClients = manifest.prototype.clients;
+    const entries = Array.isArray(configuredClients)
+      ? configuredClients.map((item) => [item?.clientId || item?.id, item])
+      : configuredClients && typeof configuredClients === 'object'
+        ? Object.entries(configuredClients)
+        : [];
+    if (entries.length) {
+      for (const [clientId, item] of entries) {
+        if (item?.enabled === false || !item?.root) continue;
+        const prototypeRoot = path.resolve(projectRoot, item.root);
+        if (!(await fileExists(prototypeRoot, 'directory')))
+          errors.push(`客户端 ${item.clientId || clientId} 的 HTML 原型目录不存在：${item.root}。`);
+      }
+    } else {
+      const prototypeRoot = path.resolve(projectRoot, manifest.prototype.root || 'prototype');
+      if (!(await fileExists(prototypeRoot, 'directory')))
+        errors.push(`HTML 原型目录不存在：${manifest.prototype.root || 'prototype'}。`);
+    }
   }
   return errors;
 }
@@ -240,6 +257,13 @@ function toPublicManifest(manifest) {
     clients: manifest.clients || [],
     entries: manifest.entries || [],
     docs: { enabled: Boolean(manifest.docs?.enabled), root: manifest.docs?.root || 'docs' },
+    prototype: {
+      enabled: Boolean(manifest.prototype?.enabled),
+      root: manifest.prototype?.root || 'prototype',
+      client: manifest.prototype?.client || '',
+      section: manifest.prototype?.section || '',
+      clients: manifest.prototype?.clients || {},
+    },
     mobile: { enabled: Boolean(manifest.mobile?.enabled), entry: manifest.mobile?.entry || null },
     features: manifest.features || {},
     compatibility: manifest.compatibility || {},
@@ -523,6 +547,15 @@ function normalizeProjectInput(body, { editing = false, existingManifest = null 
     enabled: Boolean(body.docs?.enabled ?? existingManifest?.docs?.enabled),
     root: String(body.docs?.root || existingManifest?.docs?.root || 'docs').trim() || 'docs',
   };
+  const prototype = {
+    ...(existingManifest?.prototype || {}),
+    ...(body.prototype || {}),
+    enabled: Boolean(body.prototype?.enabled ?? existingManifest?.prototype?.enabled),
+    root: String(body.prototype?.root || existingManifest?.prototype?.root || 'prototype').trim() || 'prototype',
+    client: String(body.prototype?.client || existingManifest?.prototype?.client || '').trim(),
+    section: String(body.prototype?.section || existingManifest?.prototype?.section || '').trim(),
+    clients: body.prototype?.clients || existingManifest?.prototype?.clients || {},
+  };
   const mobile = {
     ...(existingManifest?.mobile || {}),
     ...(body.mobile || {}),
@@ -560,6 +593,7 @@ function normalizeProjectInput(body, { editing = false, existingManifest = null 
     clients,
     entries,
     docs,
+    prototype,
     mobile,
     homepage,
     features,
@@ -662,6 +696,7 @@ async function createProjectPackage(projectsRoot, input) {
       clients: input.clients,
       entries: input.entries,
       docs: input.docs,
+      prototype: input.prototype,
       mobile: input.mobile,
       homepage: input.homepage,
       features: input.features,
@@ -696,6 +731,7 @@ async function updateProjectPackage(projectsRoot, input) {
     clients: input.clients,
     entries: input.entries,
     docs: input.docs,
+    prototype: input.prototype,
     mobile: input.mobile,
     homepage: input.homepage,
     features: input.features,

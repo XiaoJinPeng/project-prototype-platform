@@ -138,11 +138,13 @@ npm run generate:page -- --project sample-project --client admin --path vehicle-
 
 页面与 PRD 文件的对应关系保存在项目包 `.platform/page-prd-links.json`，可在“路由菜单管理”的页面列表中直接选择、修改或清除；历史项目中的 `page-prd-links.js` 仍作为兼容读取来源。没有关联 PRD 的页面不会显示入口。开发模式可以在 `/tools/console` 开启，也可以通过业务页面 URL 的 `?__dev=1` 开启当前浏览器会话。
 
+页面来源支持两种模式：现有 HTML 导入继续生成 Vue 页面；启用项目的 `prototype` 后，也可以按客户端分别扫描 HTML 文件夹并在现有外壳内容区运行原 HTML，HTML 直读页面不生成 Vue 副本。
+
 业务页面开发模式状态保存在工程根目录的 `platform-settings.json`，该文件已加入 `.gitignore`，只作为当前服务实例的本地配置。本机通过 Vite 开发服务保存配置，局域网访问者读取同一份配置，刷新后即可看到 PRD 和源文件入口。静态生产包只能读取构建时写入的 `platform-settings.json` 快照，不能在线修改；需要修改时应更新配置后重新构建发布。首页控制台及首页管理工具仍只保存在当前浏览器的 `sessionStorage`，不写入配置文件；`?__dev=1` 仅作为当前浏览器的临时开发模式覆盖，不会修改共享配置。
 
 ## 文档中心机制
 
-- 文档资料源由每个项目包的 `project.json.docs.root` 指定；新项目默认使用包内 `docs`。
+- 文档资料源由每个项目包的 `project.json.docs.root` 指定，支持项目包内相对路径，也支持本机可访问的绝对路径；新项目默认使用包内 `docs`。
 - 开发环境由 Vite 插件按项目递归扫描；新增、删除或移动 Markdown 后会刷新对应项目目录。
 - `npm run build` 会生成 `dist/projects/{project-id}/docs/manifest.json` 和文档内容。
 - Markdown 内容经过 DOMPurify 过滤；Mermaid 仅在文档含流程图或时序图时按需加载。

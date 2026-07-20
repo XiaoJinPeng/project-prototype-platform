@@ -82,8 +82,6 @@ async function loadProjectDocumentRoots(projectsRoot) {
       const manifest = JSON.parse(await fs.readFile(path.join(projectRoot, 'project.json'), 'utf8'));
       if (manifest.id !== entry.name || !manifest.docs?.enabled) continue;
       const docsRoot = path.resolve(projectRoot, manifest.docs.root || 'docs');
-      const insideProject = docsRoot === projectRoot || isInsideRoot(projectRoot, docsRoot);
-      if (!insideProject) continue;
       const exists = await fs
         .stat(docsRoot)
         .then((stats) => stats.isDirectory())

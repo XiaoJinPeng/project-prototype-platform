@@ -23,6 +23,7 @@ projects/{project-id}/
 ├─ assets/                      Logo、登录背景和项目图片
 ├─ data/                        可选的项目级模拟数据
 ├─ docs/                        可选的项目文档
+├─ prototype/                   可选的 HTML 原型目录
 └─ mobile/                      可选的移动端静态演示
 ```
 
@@ -51,6 +52,7 @@ npm run audit:projects
 | `clients` | 项目包含的客户端及其默认页、登录配置 |
 | `entries` | 项目首页展示的客户端、文档和移动端入口 |
 | `docs` | 文档中心开关与文档目录 |
+| `prototype` | HTML 原型直读总开关，以及按客户端配置的 HTML 目录 |
 | `mobile` | 移动端入口开关与静态 HTML 路径 |
 | `features` | 页面导入等项目能力开关 |
 | `compatibility` | 历史路由或外部文档过渡配置，新项目通常不需要 |
@@ -109,6 +111,8 @@ npm run generate:page -- --project sample-project --client admin --path example-
 - 项目 ID 创建后不可修改，必须使用小写 kebab-case，并且会作为项目文件夹名称和动态路由的一部分。
 - 新项目包或配置修改完成后，若首页没有立即更新，重启一次 Vite 开发服务即可；生产环境仍需重新构建并发布。
 - 项目页面后续通过“页面导入导出”选择目标项目，再导入按模板制作的 HTML 页面，不需要手动改外壳路由。
+- 也可以在项目配置中启用 HTML 原型直读，分别为每个客户端填写项目内或本机绝对 HTML 目录；系统会递归扫描文件，根据标题生成页面名称，根据相对路径生成稳定路由，不生成 Vue 副本。
+- HTML 直读页面在路由管理中标记为“HTML 直读”，只能通过原型目录维护；页面级 PRD 关联仍可在路由管理中配置。
 - “路由菜单管理”可以按客户端新增、编辑或删除路由；编辑可调整页面名称、路由片段、菜单分组和图标，也可以新增、重命名或删除菜单分组。仍被页面使用的分组不能删除；删除、编辑、分组修改和 HTML 替换都会在项目包备份目录中保留可还原记录。
 
 该管理能力只存在于本地 Vite 开发服务，接口仅允许本机访问；工程没有增加数据库或独立后端。
@@ -116,8 +120,9 @@ npm run generate:page -- --project sample-project --client admin --path example-
 ## 7. 文档与移动端
 
 - `docs.enabled=true` 时，文档中心按项目扫描 `docs.root`。
-- 新项目应将文档放在项目包自己的 `docs` 目录。
-- 文档必须放在项目包自己的 `docs` 目录，工程不再支持读取项目包外的 PRD 路径。
+- `docs.root` 默认是项目包内的 `docs`，也可以在本地开发环境中配置为本机可访问的绝对路径，以直接读取项目包外的 PRD 原文件。
+- 外部 PRD 目录只作为读取源，不会修改 Markdown 原文件；开发环境会实时读取，生产构建会将该目录生成到 `dist` 的文档快照中。
+- `prototype.enabled=true` 时，开发环境按 `prototype.clients.{client-id}.root` 扫描对应客户端的 HTML；生产构建会将 HTML 及其相对资源复制到 `dist/projects/{project-id}/prototype/{client-id}`。旧的 `prototype.root` 配置仍兼容读取。
 - `mobile.enabled=true` 时，`mobile.entry` 必须指向项目包内的 HTML。
 
 ## 8. 开发模式与 PRD 对照

@@ -209,8 +209,14 @@
                 <el-form-item label="入口说明" class="client-config-grid__wide">
                   <el-input v-model="entry.description" />
                 </el-form-item>
-                <el-form-item v-if="entry.kind === 'docs'" label="文档目录" class="client-config-grid__wide">
-                  <el-input v-model="form.docsRoot" placeholder="项目内目录，例如：docs" />
+                <el-form-item v-if="entry.kind === 'docs'" label="PRD目录" class="client-config-grid__wide">
+                  <el-input
+                    v-model="form.docsRoot"
+                    placeholder="支持项目内相对路径或本机绝对路径，例如：D:\\RIMO资料\\PRD"
+                  />
+                  <div class="form-help">
+                    可直接指向工程外部的 PRD 文件夹；开发环境会实时读取，生产构建时会生成对应的文档快照。
+                  </div>
                 </el-form-item>
                 <el-form-item v-else label="移动端文件" class="client-config-grid__wide">
                   <el-input v-model="form.mobileEntry" placeholder="项目内文件，例如：mobile/app.html" />
@@ -218,6 +224,57 @@
               </div>
             </article>
           </div>
+
+          <el-divider content-position="left">HTML 原型直读</el-divider>
+          <section class="prototype-source-card">
+            <div class="prototype-source-card__heading">
+              <div>
+                <strong>直接读取 HTML 原型</strong>
+                <p>保留原 HTML 文件作为唯一页面源，不生成 Vue 副本；现有导入导出功能不受影响。</p>
+              </div>
+              <el-checkbox v-model="form.prototype.enabled">启用</el-checkbox>
+            </div>
+            <div v-if="form.clients.length" class="prototype-client-list">
+              <article v-for="client in form.clients" :key="client.id" class="prototype-client-card">
+                <div class="prototype-client-card__header">
+                  <div>
+                    <strong>{{ client.name }}</strong>
+                    <el-tag size="small" type="info">{{ client.id }}</el-tag>
+                    <p>为该客户端指定独立的 HTML 原型目录，目录内的页面会自动挂载到此客户端菜单。</p>
+                  </div>
+                  <el-checkbox
+                    v-model="form.prototype.clients[client.id].enabled"
+                    :disabled="!form.prototype.enabled"
+                  >
+                    读取此客户端
+                  </el-checkbox>
+                </div>
+                <div class="client-config-grid">
+                  <el-form-item label="HTML 原型目录" class="client-config-grid__wide">
+                    <el-input
+                      v-model="form.prototype.clients[client.id].root"
+                      placeholder="支持项目内相对路径或本机绝对路径，例如：D:\\RIMO原型\\admin"
+                      :disabled="!form.prototype.enabled || !form.prototype.clients[client.id].enabled"
+                    />
+                    <div class="form-help">
+                      系统会递归扫描 HTML 文件，标题用于页面名称，文件相对路径用于生成稳定路由。
+                    </div>
+                  </el-form-item>
+                  <el-form-item label="菜单分组">
+                    <el-input
+                      v-model="form.prototype.clients[client.id].section"
+                      placeholder="可选，例如：workspace"
+                      :disabled="!form.prototype.enabled || !form.prototype.clients[client.id].enabled"
+                    />
+                  </el-form-item>
+                </div>
+              </article>
+            </div>
+            <el-empty v-else description="请先登记至少一个客户端" />
+            <div class="form-help prototype-source-card__help">
+              每个客户端可以指向不同的 HTML 文件夹；保存后开发环境会重新扫描，生产环境构建时会复制这些文件及其相对资源。
+            </div>
+          </section>
 
           <el-divider content-position="left">首页显示</el-divider>
           <div class="feature-switches">
@@ -284,6 +341,7 @@ const form = reactive({
   clients: [],
   resourceEntries: [],
   docsRoot: 'docs',
+  prototype: { enabled: false, root: 'prototype', client: '', section: '', clients: {} },
   mobileEntry: 'mobile/app.html',
   features: { pageTransfer: true, designSystem: true, legacyI18n: false },
   compatibility: { legacyRoutes: false },
@@ -333,6 +391,45 @@ function createResourceEntryDraft(kind, entry = null) {
   };
 }
 
+function createPrototypeClientDraft(config = {}) {
+  return {
+    enabled: Boolean(config.enabled),
+    root: config.root || '',
+    section: config.section || '',
+  };
+}
+
+function createPrototypeClientMap(clients, prototype = {}) {
+  const configuredClients = prototype.clients || {};
+  const legacyClient = prototype.client || (clients.length === 1 ? clients[0]?.id : '');
+  return Object.fromEntries(
+    clients.map((client) => {
+      const configured = Array.isArray(configuredClients)
+        ? configuredClients.find((item) => (item?.clientId || item?.id) === client.id)
+        : configuredClients[client.id];
+      const legacyConfig = client.id === legacyClient
+        ? {
+            enabled: Boolean(prototype.enabled),
+            root: prototype.root || 'prototype',
+            section: prototype.section || '',
+          }
+        : {};
+      return [client.id, createPrototypeClientDraft(configured || legacyConfig)];
+    }),
+  );
+}
+
+function syncPrototypeClientMap() {
+  const validIds = new Set(form.clients.map((client) => client.id));
+  form.clients.forEach((client) => {
+    if (!client.id) return;
+    form.prototype.clients[client.id] ||= createPrototypeClientDraft();
+  });
+  Object.keys(form.prototype.clients).forEach((clientId) => {
+    if (!validIds.has(clientId)) delete form.prototype.clients[clientId];
+  });
+}
+
 function resetForm() {
   Object.assign(form, {
     id: '',
@@ -360,12 +457,14 @@ function resetForm() {
       createResourceEntryDraft('mobile'),
     ],
     docsRoot: 'docs',
+    prototype: { enabled: false, root: 'prototype', client: '', section: '', clients: {} },
     mobileEntry: 'mobile/app.html',
     features: { pageTransfer: true, designSystem: true, legacyI18n: false },
     compatibility: { legacyRoutes: false },
     logoDataUrl: '',
     removeLogo: false,
   });
+  form.prototype.clients = createPrototypeClientMap(form.clients);
   logoPreview.value = '';
   activeConfigTab.value = 'basic';
   if (logoInput.value) logoInput.value.value = '';
@@ -375,6 +474,9 @@ function hydrateProject(project) {
   resetForm();
   if (!project) return;
   const entries = project.entries || [];
+  const projectClients = (project.clients || []).map((client) =>
+    createClientDraft(client, entries.find((entry) => entry.kind === 'client' && entry.clientId === client.id)),
+  );
   Object.assign(form, {
     id: project.id,
     name: project.name,
@@ -385,13 +487,18 @@ function hydrateProject(project) {
     primary: project.theme?.primary || '#2563eb',
     pageBackground: project.theme?.pageBackground || '#f5f7fb',
     homepageVisible: project.homepage?.visible !== false,
-    clients: (project.clients || []).map((client) =>
-      createClientDraft(client, entries.find((entry) => entry.kind === 'client' && entry.clientId === client.id)),
-    ),
+    clients: projectClients,
     resourceEntries: ['docs', 'mobile'].map((kind) =>
       createResourceEntryDraft(kind, entries.find((entry) => entry.kind === kind)),
     ),
     docsRoot: project.docs?.root || 'docs',
+    prototype: {
+      enabled: Boolean(project.prototype?.enabled),
+      root: project.prototype?.root || 'prototype',
+      client: project.prototype?.client || '',
+      section: project.prototype?.section || '',
+      clients: createPrototypeClientMap(projectClients, project.prototype || {}),
+    },
     mobileEntry: project.mobile?.entry || 'mobile/app.html',
     features: {
       pageTransfer: project.features?.pageTransfer !== false,
@@ -414,6 +521,12 @@ watch(
   ([visible]) => {
     if (visible) prepareForm();
   },
+);
+
+watch(
+  () => form.clients.map((client) => client.id),
+  () => syncPrototypeClientMap(),
+  { immediate: true },
 );
 
 function chooseLogo() {
@@ -457,6 +570,7 @@ function addClient() {
       null,
     ),
   );
+  syncPrototypeClientMap();
   activeConfigTab.value = 'clients';
 }
 
@@ -464,6 +578,7 @@ function removeClient(client) {
   if (!client.isNew) return;
   const index = form.clients.indexOf(client);
   if (index >= 0) form.clients.splice(index, 1);
+  syncPrototypeClientMap();
 }
 
 function buildProjectPayload() {
@@ -504,6 +619,19 @@ function buildProjectPayload() {
   ];
   const docsEntry = form.resourceEntries.find((entry) => entry.kind === 'docs');
   const mobileEntry = form.resourceEntries.find((entry) => entry.kind === 'mobile');
+  const prototypeClients = Object.fromEntries(
+    form.clients.map((client) => {
+      const config = form.prototype.clients[client.id] || {};
+      return [
+        client.id,
+        {
+          enabled: Boolean(config.enabled),
+          root: String(config.root || '').trim(),
+          section: String(config.section || '').trim(),
+        },
+      ];
+    }),
+  );
   return {
     id: form.id,
     name: form.name,
@@ -517,6 +645,13 @@ function buildProjectPayload() {
     clients,
     entries,
     docs: { enabled: Boolean(docsEntry?.enabled), root: form.docsRoot.trim() || 'docs' },
+    prototype: {
+      enabled: Boolean(form.prototype.enabled),
+      root: form.prototype.root.trim() || 'prototype',
+      client: form.prototype.client.trim(),
+      section: form.prototype.section.trim(),
+      clients: prototypeClients,
+    },
     mobile: { enabled: Boolean(mobileEntry?.enabled), entry: form.mobileEntry.trim() || 'mobile/app.html' },
     features: { ...form.features },
     compatibility: { legacyRoutes: Boolean(form.compatibility.legacyRoutes) },
@@ -653,6 +788,67 @@ async function submitForm() {
   border: 0.5px solid rgb(0 0 0 / 8%);
   border-radius: 14px;
   background: #f8f8fa;
+}
+.prototype-source-card {
+  margin-bottom: 20px;
+  padding: 18px;
+  border: 0.5px solid rgb(0 0 0 / 8%);
+  border-radius: 14px;
+  background: #f8f8fa;
+}
+.prototype-source-card__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.prototype-source-card__heading strong,
+.prototype-source-card__heading p {
+  margin: 0;
+}
+.prototype-source-card__heading strong {
+  color: var(--app-color-text-primary);
+  font-size: 15px;
+}
+.prototype-source-card__heading p {
+  margin-top: 5px;
+  color: var(--app-color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.prototype-client-list {
+  display: grid;
+  gap: 12px;
+}
+.prototype-client-card {
+  padding: 16px;
+  border: 1px solid rgb(37 99 235 / 14%);
+  border-radius: 14px;
+  background: rgb(37 99 235 / 3%);
+}
+.prototype-client-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.prototype-client-card__header strong {
+  color: var(--app-color-text-primary);
+  font-size: 14px;
+}
+.prototype-client-card__header .el-tag {
+  margin-left: 8px;
+}
+.prototype-client-card__header p {
+  margin: 5px 0 0;
+  color: var(--app-color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.prototype-source-card__help {
+  margin-top: 12px;
 }
 .client-config-card__header,
 .resource-entry-card__header {
@@ -1056,6 +1252,13 @@ async function submitForm() {
 
 .client-config-card,
 .resource-entry-card {
+  padding: 20px;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 16px;
+  background: #fbfbfc;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 3%);
+}
+.prototype-source-card {
   padding: 20px;
   border: 1px solid rgb(0 0 0 / 8%);
   border-radius: 16px;

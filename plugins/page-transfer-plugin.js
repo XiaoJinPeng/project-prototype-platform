@@ -8,6 +8,8 @@ import vuePlugin from '@vitejs/plugin-vue';
 import prettier from 'prettier';
 import { build as viteBuild } from 'vite';
 
+import { scanHtmlPrototypePages } from './html-prototype-plugin.js';
+
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const PAGE_PATH_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const allowedIcons = new Set([
@@ -692,6 +694,8 @@ async function writeDefinitions(definitionsPath, source) {
 
 export async function listProjectRoutes({ projectRoot, projectId }) {
   const projectPackage = await loadProjectPackage(projectRoot, projectId);
+  const htmlPrototypeState = await scanHtmlPrototypePages(projectRoot);
+  const htmlPages = htmlPrototypeState.projects[projectId] || {};
   return {
     project: {
       id: projectPackage.projectId,
@@ -705,7 +709,10 @@ export async function listProjectRoutes({ projectRoot, projectId }) {
         name: client.name,
         basePath: projectPackage.definitions[client.id].basePath || `/${client.id}`,
         sections: projectPackage.definitions[client.id].sections || [],
-        pages: projectPackage.definitions[client.id].pages || [],
+        pages: [
+          ...(projectPackage.definitions[client.id].pages || []),
+          ...(htmlPages[client.id] || []),
+        ],
       })),
     backups: await listPageBackups(projectPackage),
     sectionBackups: await listSectionBackups(projectPackage),
@@ -1216,7 +1223,9 @@ async function writeExportWorkspace({
   projectPackage,
   definitions,
   selectedPages,
+  bundlePages = selectedPages,
   exportManifest,
+  currentPage = bundlePages[0],
 }) {
   await fsp.mkdir(workDir, { recursive: true });
   await fsp.writeFile(
@@ -1258,11 +1267,100 @@ async function writeExportWorkspace({
     path.join(projectRoot, 'src', 'components', 'AppShell.vue'),
     'utf8',
   );
+  await fsp.writeFile(
+    path.join(workDir, 'PrdReviewPanel.vue'),
+    '<template><span class="export-prd-placeholder" aria-hidden="true"></span></template>\n',
+    'utf8',
+  );
+  await fsp.writeFile(
+    path.join(workDir, 'PrdAssociationLayer.vue'),
+    '<template><span class="export-prd-association-placeholder" aria-hidden="true"></span></template>\n',
+    'utf8',
+  );
+  const exportProjectSourcesImport = './export-project-sources.js';
+  await fsp.writeFile(
+    path.join(workDir, 'export-project-sources.js'),
+    'export async function downloadProjectSource() { return false; }\n',
+    'utf8',
+  );
+  const exportPlatformSettingsImport = './export-platform-settings.js';
+  await fsp.writeFile(
+    path.join(workDir, 'export-platform-settings.js'),
+    `import { reactive } from 'vue';
+
+export const canPersistPlatformSettings = false;
+export const platformSettings = reactive({ developerMode: false, loaded: true });
+export function loadPlatformSettings() { return Promise.resolve(platformSettings); }
+export async function setPlatformDeveloperMode() { return platformSettings; }
+`,
+    'utf8',
+  );
+  await fsp.writeFile(
+    path.join(workDir, 'export-router.js'),
+    `const projectId = ${JSON.stringify(projectPackage.projectId)};
+
+function exportPath(target) {
+  const rawPath = typeof target === 'string' ? target : target?.path || '/';
+  const normalizedPath = String(rawPath).startsWith('/') ? String(rawPath) : '/' + rawPath;
+  return normalizedPath.startsWith('/p/') ? normalizedPath : '/p/' + projectId + normalizedPath;
+}
+
+function exportDestination(target) {
+  const routePath = exportPath(target);
+  const routeBase = routePath.split(/[?#]/, 1)[0];
+  const page = window.__PROJECT_EXPORT__?.pages?.find((entry) => {
+    const path = typeof entry === 'string' ? entry : entry?.path;
+    return path === routeBase;
+  });
+  return page && typeof page === 'object' && page.file
+    ? './' + page.file + '#' + routePath
+    : '#' + routePath;
+}
+
+const router = {
+  push(target) {
+    window.location.href = exportDestination(target);
+    return Promise.resolve();
+  },
+  replace(target) {
+    window.location.replace(exportDestination(target));
+    return Promise.resolve();
+  },
+};
+
+export default router;
+`,
+    'utf8',
+  );
+  const exportSourceRoot = path.join(workDir, 'export-src');
+  await fsp.cp(
+    path.join(projectRoot, 'src', 'components', 'ui'),
+    path.join(exportSourceRoot, 'components', 'ui'),
+    { recursive: true },
+  );
+  await fsp.mkdir(path.join(exportSourceRoot, 'config'), { recursive: true });
+  await fsp.copyFile(
+    path.join(projectRoot, 'src', 'config', 'theme.js'),
+    path.join(exportSourceRoot, 'config', 'theme.js'),
+  );
+  await fsp.mkdir(path.join(exportSourceRoot, 'composables'), { recursive: true });
+  await fsp.copyFile(
+    path.join(projectRoot, 'src', 'composables', 'useChartRegistry.js'),
+    path.join(exportSourceRoot, 'composables', 'useChartRegistry.js'),
+  );
+  await fsp.mkdir(path.join(exportSourceRoot, 'router'), { recursive: true });
+  await fsp.writeFile(
+    path.join(exportSourceRoot, 'router', 'index.js'),
+    "export { default } from '../../export-router.js';\n",
+    'utf8',
+  );
   const exportAppShellSource = appShellSource
     .replace("'../config/project.config'", JSON.stringify(projectConfigImport))
     .replace("'../config/project-packages'", JSON.stringify(projectPackagesImport))
     .replace("'../i18n'", JSON.stringify(i18nImport))
-    .replace("'../i18n/legacy-localizer'", JSON.stringify(localizerImport));
+    .replace("'../i18n/legacy-localizer'", JSON.stringify(localizerImport))
+    .replace("'../services/project-sources'", JSON.stringify(exportProjectSourcesImport))
+    .replace("'../services/platform-settings'", JSON.stringify(exportPlatformSettingsImport));
   await fsp.writeFile(path.join(workDir, 'ExportAppShell.vue'), exportAppShellSource, 'utf8');
   const appShellImport = './ExportAppShell.vue';
   const tokensImport = relativeModuleImport(workDir, path.join(projectRoot, 'src', 'styles', 'tokens.css'));
@@ -1275,7 +1373,8 @@ async function writeExportWorkspace({
 
   for (const client of Object.keys(definitions)) {
     const clientPages = selectedPages.filter((page) => page.client === client);
-    if (!clientPages.length) continue;
+    const bundleClientPages = bundlePages.filter((page) => page.client === client);
+    if (!bundleClientPages.length) continue;
 
     const layoutName = `${toPascalCase(client)}ExportLayout`;
     const layoutFile = `${layoutName}.vue`;
@@ -1289,13 +1388,11 @@ async function writeExportWorkspace({
     layoutImports.push(`import ${layoutName} from './${layoutFile}';`);
 
     const childRoutes = [];
-    for (const page of clientPages) {
+    for (const page of bundleClientPages) {
       const pageVariable = `ExportPage${pageIndex}`;
       pageIndex += 1;
-      const viewImport = relativeModuleImport(
-        workDir,
-        resolveProjectViewPath(projectRoot, projectPackage, page.view),
-      );
+      const viewPath = resolveProjectViewPath(projectRoot, projectPackage, page.view);
+      const viewImport = relativeModuleImport(workDir, viewPath);
       pageImports.push(`import ${pageVariable} from ${JSON.stringify(viewImport)};`);
       childRoutes.push(
         `{ path: ${JSON.stringify(page.path)}, name: ${JSON.stringify(`export-${page.client}-${page.name}`)}, component: ${pageVariable}, meta: { title: ${JSON.stringify(page.title)}, projectId: ${JSON.stringify(projectPackage.projectId)}, clientId: ${JSON.stringify(page.client)}${page.legacy ? ', legacy: true' : ''} } }`,
@@ -1311,7 +1408,7 @@ async function writeExportWorkspace({
     }
   }
 
-  const defaultPath = selectedPages[0].fullPath;
+  const defaultPath = currentPage.fullPath;
   const routerSource = `import { createRouter, createWebHashHistory } from 'vue-router';\n${layoutImports.join('\n')}\n${pageImports.join('\n')}\nimport { projectConfig } from ${JSON.stringify(projectConfigImport)};\n\nconst defaultPath = ${JSON.stringify(defaultPath)};\nconst router = createRouter({\n  history: createWebHashHistory(),\n  routes: [${routeGroups.join(', ')}, { path: '/:pathMatch(.*)*', redirect: defaultPath }],\n});\nrouter.afterEach((to) => { document.title = \`${'${to.meta.title || projectConfig.platformTitle}'} - ${'${projectConfig.name}'}\`; });\nexport default router;\n`;
   await fsp.writeFile(path.join(workDir, 'router.js'), routerSource, 'utf8');
 
@@ -1432,6 +1529,95 @@ function materializeExportHtml(baseHtml, manifest, currentPath) {
     .replaceAll('__CURRENT_PATH__', currentPath);
 }
 
+async function buildExportPage({
+  workDir,
+  projectRoot,
+  projectPackage,
+  definitions,
+  selectedPages,
+  bundlePages,
+  currentPage,
+  exportManifest,
+}) {
+  const distDir = path.join(workDir, 'dist');
+  const exportSourceRoot = path.join(workDir, 'export-src');
+  await writeExportWorkspace({
+    workDir,
+    projectRoot,
+    projectPackage,
+    definitions,
+    selectedPages,
+    bundlePages,
+    currentPage,
+    exportManifest,
+  });
+
+  await viteBuild({
+    root: workDir,
+    configFile: false,
+    publicDir: false,
+    base: './',
+    logLevel: 'silent',
+    plugins: [vuePlugin()],
+    resolve: {
+      alias: [
+        {
+          find: path.resolve(projectRoot, 'src', 'router', 'index.js'),
+          replacement: path.join(workDir, 'export-router.js'),
+        },
+        {
+          find: path.resolve(projectRoot, 'src', 'config', 'project-packages.js'),
+          replacement: path.join(workDir, 'export-project-packages.js'),
+        },
+        { find: '@', replacement: exportSourceRoot },
+      ],
+    },
+    css: { postcss: projectRoot },
+    build: {
+      outDir: distDir,
+      emptyOutDir: true,
+      minify: 'esbuild',
+      sourcemap: false,
+      assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+      cssCodeSplit: false,
+      modulePreload: false,
+      reportCompressedSize: false,
+      rollupOptions: {
+        external: (id) => {
+          const normalizedId = id.replaceAll('\\\\', '/');
+          const externalPackages = [
+            'vue',
+            'vue-router',
+            'vue-i18n',
+            'element-plus',
+            '@element-plus/icons-vue',
+          ];
+          return externalPackages.some(
+            (packageName) =>
+              normalizedId === packageName ||
+              normalizedId.startsWith(`${packageName}/`) ||
+              normalizedId.includes(`/node_modules/${packageName}/`),
+          );
+        },
+        output: {
+          inlineDynamicImports: true,
+          format: 'iife',
+          name: 'StandalonePrototypePage',
+          globals: {
+            vue: 'Vue',
+            'vue-router': 'VueRouter',
+            'vue-i18n': 'VueI18n',
+            'element-plus': 'ElementPlus',
+            '@element-plus/icons-vue': 'ElementPlusIconsVue',
+          },
+        },
+      },
+    },
+  });
+
+  return inlineViteOutput(distDir);
+}
+
 async function createExportPackage({ projectRoot, projectId, selectedPaths, packageName }) {
   const projectPackage = await loadProjectPackage(projectRoot, projectId);
   const definitions = projectPackage.definitions;
@@ -1454,7 +1640,6 @@ async function createExportPackage({ projectRoot, projectId, selectedPaths, pack
       .replace(/^-+|-+$/g, '') || '页面演示包';
   const exportsRoot = path.join(projectRoot, 'exports', projectPackage.projectId);
   const workDir = path.join(projectRoot, '.page-transfer-work', exportId);
-  const distDir = path.join(workDir, 'dist');
   await fsp.mkdir(exportsRoot, { recursive: true });
 
   const singleFileName = `${safeName}-${exportId}.html`;
@@ -1490,72 +1675,24 @@ async function createExportPackage({ projectRoot, projectId, selectedPaths, pack
   };
 
   try {
-    await writeExportWorkspace({
-      workDir,
-      projectRoot,
-      projectPackage,
-      definitions,
-      selectedPages: selectedWithFiles,
-      exportManifest,
-    });
-    await viteBuild({
-      root: workDir,
-      configFile: false,
-      publicDir: false,
-      base: './',
-      logLevel: 'silent',
-      plugins: [vuePlugin()],
-      resolve: {
-        alias: {
-          '@': path.join(projectRoot, 'src'),
-        },
-      },
-      css: { postcss: projectRoot },
-      build: {
-        outDir: distDir,
-        emptyOutDir: true,
-        minify: 'esbuild',
-        sourcemap: false,
-        assetsInlineLimit: Number.MAX_SAFE_INTEGER,
-        cssCodeSplit: false,
-        modulePreload: false,
-        reportCompressedSize: false,
-        rollupOptions: {
-          external: (id) => {
-            const normalizedId = id.replaceAll('\\\\', '/');
-            const externalPackages = [
-              'vue',
-              'vue-router',
-              'vue-i18n',
-              'element-plus',
-              '@element-plus/icons-vue',
-            ];
-            return externalPackages.some(
-              (packageName) =>
-                normalizedId === packageName ||
-                normalizedId.startsWith(`${packageName}/`) ||
-                normalizedId.includes(`/node_modules/${packageName}/`),
-            );
-          },
-          output: {
-            inlineDynamicImports: true,
-            format: 'iife',
-            name: 'StandalonePrototypePage',
-            globals: {
-              vue: 'Vue',
-              'vue-router': 'VueRouter',
-              'vue-i18n': 'VueI18n',
-              'element-plus': 'ElementPlus',
-              '@element-plus/icons-vue': 'ElementPlusIconsVue',
-            },
-          },
-        },
-      },
-    });
-    const baseHtml = await inlineViteOutput(distDir);
+    const pageBundles = [];
+    for (const page of selectedWithFiles) {
+      const pageWorkDir = path.join(workDir, page.file.replace(/\.html$/i, ''));
+      const baseHtml = await buildExportPage({
+        workDir: pageWorkDir,
+        projectRoot,
+        projectPackage,
+        definitions,
+        selectedPages: selectedWithFiles,
+        bundlePages: [page],
+        currentPage: page,
+        exportManifest,
+      });
+      pageBundles.push({ page, baseHtml });
+    }
 
     if (selectedWithFiles.length === 1) {
-      const page = selectedWithFiles[0];
+      const { page, baseHtml } = pageBundles[0];
       const htmlPath = path.join(exportsRoot, page.file);
       await fsp.writeFile(htmlPath, materializeExportHtml(baseHtml, exportManifest, page.fullPath), 'utf8');
       const relativeHtml = toPosixPath(path.relative(projectRoot, htmlPath));
@@ -1572,7 +1709,7 @@ async function createExportPackage({ projectRoot, projectId, selectedPaths, pack
 
     const exportDir = path.join(exportsRoot, `${safeName}-${exportId}`);
     await fsp.mkdir(exportDir, { recursive: true });
-    for (const page of selectedWithFiles) {
+    for (const { page, baseHtml } of pageBundles) {
       await fsp.writeFile(
         path.join(exportDir, page.file),
         materializeExportHtml(baseHtml, exportManifest, page.fullPath),

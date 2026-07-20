@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { scanProjectPackages } from '../../plugins/project-packages-plugin.js';
+import { scanHtmlPrototypePages } from '../../plugins/html-prototype-plugin.js';
 
 const temporaryRoots = [];
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -63,5 +64,102 @@ describe('project package scanner', () => {
     const result = await scanProjectPackages(projectsRoot);
     expect(result.projects).toEqual([]);
     expect(result.invalidProjects[0].errors).toContain('页面文件不存在：admin/HomeView.vue。');
+  });
+
+  it('accepts a PRD directory outside the project package', async () => {
+    const { projectsRoot, packageRoot } = await createProjectFixture();
+    const externalDocsRoot = path.join(path.dirname(projectsRoot), 'prd-source');
+    await fs.mkdir(externalDocsRoot, { recursive: true });
+    await fs.writeFile(path.join(externalDocsRoot, 'overview.md'), '# Overview\n', 'utf8');
+    await fs.writeFile(
+      path.join(packageRoot, 'project.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'sample-project',
+        name: '示例项目',
+        pageDefinitions: 'page-definitions.js',
+        clients: [{ id: 'admin', name: '管理端', defaultPage: 'home' }],
+        entries: [
+          { id: 'admin', kind: 'client', clientId: 'admin', name: '管理端' },
+          { id: 'docs', kind: 'docs', name: '产品文档' },
+        ],
+        docs: { enabled: true, root: externalDocsRoot },
+        features: { pageTransfer: true },
+      }),
+      'utf8',
+    );
+
+    const result = await scanProjectPackages(projectsRoot);
+    expect(result.invalidProjects).toEqual([]);
+    expect(result.projects[0].docs.root).toBe(externalDocsRoot);
+  });
+
+  it('scans HTML prototypes and derives stable page metadata', async () => {
+    const { projectsRoot, packageRoot } = await createProjectFixture();
+    const prototypeRoot = path.join(path.dirname(projectsRoot), 'html-prototypes');
+    await fs.mkdir(path.join(prototypeRoot, 'admin'), { recursive: true });
+    await fs.writeFile(
+      path.join(prototypeRoot, 'admin', 'dashboard.html'),
+      '<!doctype html><html><head><title>示例仪表板</title></head><body><h1>示例仪表板</h1></body></html>',
+      'utf8',
+    );
+    await fs.writeFile(
+      path.join(packageRoot, 'project.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'sample-project',
+        name: '示例项目',
+        pageDefinitions: 'page-definitions.js',
+        clients: [{ id: 'admin', name: '管理端', defaultPage: 'home' }],
+        prototype: { enabled: true, root: prototypeRoot },
+      }),
+      'utf8',
+    );
+
+    const result = await scanHtmlPrototypePages(projectsRoot);
+    const page = result.projects['sample-project'].admin[0];
+    expect(page).toMatchObject({
+      path: 'dashboard',
+      title: '示例仪表板',
+      sourceType: 'html-direct',
+      source: 'admin/dashboard.html',
+      section: 'workspace',
+    });
+  });
+
+  it('scans a separate HTML source folder for each client', async () => {
+    const { projectsRoot, packageRoot } = await createProjectFixture();
+    const adminPrototypeRoot = path.join(path.dirname(projectsRoot), 'admin-html');
+    await fs.mkdir(adminPrototypeRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(adminPrototypeRoot, 'dashboard.html'),
+      '<!doctype html><html><head><title>管理端仪表板</title></head><body></body></html>',
+      'utf8',
+    );
+    await fs.writeFile(
+      path.join(packageRoot, 'project.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'sample-project',
+        name: '示例项目',
+        pageDefinitions: 'page-definitions.js',
+        clients: [{ id: 'admin', name: '管理端', defaultPage: 'home' }],
+        prototype: {
+          enabled: true,
+          clients: { admin: { enabled: true, root: adminPrototypeRoot, section: 'workspace' } },
+        },
+      }),
+      'utf8',
+    );
+
+    const result = await scanHtmlPrototypePages(projectsRoot);
+    const page = result.projects['sample-project'].admin[0];
+    expect(page).toMatchObject({
+      path: 'dashboard',
+      title: '管理端仪表板',
+      source: 'dashboard.html',
+      sourceRoot: 'admin',
+    });
+    expect(result.roots['sample-project'][0]).toMatchObject({ clientId: 'admin' });
   });
 });

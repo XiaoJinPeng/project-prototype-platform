@@ -1,4 +1,7 @@
 import * as ElementIcons from '@element-plus/icons-vue';
+import htmlPrototypePages from 'virtual:project-html-pages';
+
+import HtmlPrototypeView from '../views/prototype/HtmlPrototypeView.vue';
 
 const manifestModules = import.meta.glob('../../projects/*/project.json', {
   eager: true,
@@ -37,19 +40,52 @@ function mergePagePrdLinks(baseLinks, overrideLinks) {
   return merged;
 }
 
+function mergeHtmlPrototypePages(definitions, pagesByClient = {}) {
+  const merged = Object.fromEntries(
+    Object.entries(definitions || {}).map(([clientId, definition]) => [
+      clientId,
+      {
+        ...definition,
+        pages: mergeHtmlPages(definition.pages || [], pagesByClient[clientId] || []),
+      },
+    ]),
+  );
+  return merged;
+}
+
+function mergeHtmlPages(existingPages, htmlPages) {
+  const usedPaths = new Set(existingPages.map((page) => page.path));
+  const usedNames = new Set(existingPages.map((page) => page.name));
+  const resolvedPages = [...existingPages];
+  for (const page of htmlPages) {
+    let path = page.path;
+    if (usedPaths.has(path)) path = `html-${path}-${String(page.name).replace(/^html-/u, '')}`;
+    let name = page.name;
+    let suffix = 2;
+    while (usedPaths.has(path)) path = `${page.path}-${suffix++}`;
+    while (usedNames.has(name)) name = `${page.name}-${suffix++}`;
+    usedPaths.add(path);
+    usedNames.add(name);
+    resolvedPages.push({ ...page, path, name });
+  }
+  return resolvedPages;
+}
+
 function normalizeProject(modulePath, manifest) {
   const folder = projectFolderFromPath(modulePath);
   const definitionsModule = definitionModules[`../../projects/${folder}/${manifest.pageDefinitions}`];
   const definitions = definitionsModule?.clientPageDefinitions || definitionsModule?.default;
+  if (!folder || folder !== manifest.id || !definitions) return null;
+  const mergedDefinitions = mergeHtmlPrototypePages(definitions, htmlPrototypePages[folder]);
   const legacyPagePrdLinks = pagePrdLinkModules[`../../projects/${folder}/page-prd-links.js`] || {};
   const pagePrdLinkConfig =
     pagePrdLinkConfigModules[`../../projects/${folder}/.platform/page-prd-links.json`];
   const pagePrdLinks = mergePagePrdLinks(legacyPagePrdLinks, pagePrdLinkConfig?.links || {});
-  if (!folder || folder !== manifest.id || !definitions) return null;
+  if (!mergedDefinitions) return null;
   const clients = (manifest.clients || [])
-    .filter((client) => definitions[client.id])
-    .map((client) => ({ ...client, definition: definitions[client.id] }));
-  return Object.freeze({ ...manifest, folder, definitions, pagePrdLinks, clients });
+    .filter((client) => mergedDefinitions[client.id])
+    .map((client) => ({ ...client, definition: mergedDefinitions[client.id] }));
+  return Object.freeze({ ...manifest, folder, definitions: mergedDefinitions, pagePrdLinks, clients });
 }
 
 export const installedProjects = Object.freeze(
@@ -81,6 +117,10 @@ export function resolveProjectView(project, view) {
   throw new Error(`项目 ${project.id} 的页面模块不存在：${view}`);
 }
 
+function isHtmlPrototypePage(page) {
+  return page?.sourceType === 'html-direct' && page.source;
+}
+
 export function createProjectMenus(projectId, clientId) {
   const project = getProject(projectId);
   const client = getProjectClient(projectId, clientId);
@@ -104,12 +144,16 @@ export function createProjectPageRoutes(project, client) {
   return client.definition.pages.map((page) => ({
     path: page.path,
     name: `${project.id}-${client.id}-${page.name}`,
-    component: resolveProjectView(project, page.view),
+    component: isHtmlPrototypePage(page) ? HtmlPrototypeView : resolveProjectView(project, page.view),
+    ...(isHtmlPrototypePage(page)
+      ? { props: { projectId: project.id, clientId: page.sourceRoot || client.id, sourcePath: page.source } }
+      : {}),
     meta: {
       title: page.title,
       projectId: project.id,
       clientId: client.id,
       ...(page.view ? { source: `views/${String(page.view).replace(/^\/+/, '')}` } : {}),
+      ...(isHtmlPrototypePage(page) ? { sourceType: 'html-direct', htmlSource: page.source } : {}),
       ...(project.pagePrdLinks?.[client.id]?.[page.name]
         ? { prd: project.pagePrdLinks[client.id][page.name] }
         : {}),

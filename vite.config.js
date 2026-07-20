@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue';
 import { fileURLToPath } from 'node:url';
 import { prdContentPlugin } from './plugins/prd-content-plugin.js';
 import { pageTransferPlugin } from './plugins/page-transfer-plugin.js';
+import { htmlPrototypePlugin } from './plugins/html-prototype-plugin.js';
 import { projectPackagesPlugin } from './plugins/project-packages-plugin.js';
 import { platformSettingsPlugin } from './plugins/platform-settings-plugin.js';
 
@@ -16,6 +17,7 @@ export default defineConfig({
     vue(),
     platformSettingsPlugin({ settingsPath: platformSettingsPath }),
     projectPackagesPlugin({ projectsRoot }),
+    htmlPrototypePlugin({ projectsRoot }),
     prdContentPlugin({ projectsRoot }),
     pageTransferPlugin(),
   ],

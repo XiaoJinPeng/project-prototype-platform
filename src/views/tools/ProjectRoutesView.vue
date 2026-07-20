@@ -120,14 +120,19 @@
             </el-table-column>
             <el-table-column label="来源" width="120">
               <template #default="{ row }">
-                <el-tag size="small" :type="row.source === 'html-template' ? 'success' : 'info'">
-                  {{ row.source === 'html-template' ? 'HTML 导入' : '工程页面' }}
+                <el-tag
+                  size="small"
+                  :type="row.source === 'html-direct' || row.source === 'html-template' ? 'success' : 'info'"
+                >
+                  {{ row.source === 'html-direct' ? 'HTML 直读' : row.source === 'html-template' ? 'HTML 导入' : '工程页面' }}
                 </el-tag>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="230" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" @click="openEditRoute(client, row)">编辑</el-button>
+                <el-button v-if="row.source !== 'html-direct'" link type="primary" @click="openEditRoute(client, row)">
+                  编辑
+                </el-button>
                 <el-button
                   link
                   type="primary"
@@ -137,7 +142,10 @@
                 >
                   {{ pagePrdLinkFor(client.id, row.name) ? '编辑 PRD' : '关联 PRD' }}
                 </el-button>
-                <el-button link type="danger" @click="deleteRoute(client, row)">删除</el-button>
+                <el-button v-if="row.source !== 'html-direct'" link type="danger" @click="deleteRoute(client, row)">
+                  删除
+                </el-button>
+                <span v-if="row.source === 'html-direct'" class="route-source-note">由 HTML 原型目录管理</span>
               </template>
             </el-table-column>
           </el-table>
@@ -1074,6 +1082,11 @@ async function restoreSectionBackup(backup) {
   overflow: hidden;
   color: var(--app-color-text-secondary);
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.route-source-note {
+  color: var(--app-color-text-muted);
+  font-size: 12px;
   white-space: nowrap;
 }
 .routes-panel :deep(.el-table) {
