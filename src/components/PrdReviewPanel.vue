@@ -9,6 +9,7 @@ const props = defineProps({
   projectId: { type: String, required: true },
   documentPath: { type: String, default: '' },
   documentPaths: { type: Array, default: () => [] },
+  documentAnchor: { type: String, default: '' },
   pageTitle: { type: String, required: true },
   layoutMode: { type: String, default: 'split' },
 });
@@ -21,6 +22,21 @@ const documentSearch = ref('');
 const searchMatchCount = ref(0);
 const searchMatchIndex = ref(0);
 const readerRef = ref(null);
+const panelRef = ref(null);
+const isDragging = ref(false);
+const isCompactViewport = ref(false);
+const overlayPosition = ref({ x: 0, y: 0 });
+let dragState = null;
+
+const overlayStyle = computed(() => {
+  if (props.layoutMode !== 'overlay' || isCompactViewport.value) return undefined;
+
+  return {
+    transform: `translate3d(${overlayPosition.value.x}px, ${overlayPosition.value.y}px, 0)`,
+  };
+});
+
+const positionStorageKey = computed(() => `prd-review-pane-position:${props.projectId}`);
 
 function handleOutsideOutline(event) {
   if (!outlineVisible.value) return;
@@ -31,13 +47,153 @@ function handleOutsideOutline(event) {
   outlineVisible.value = false;
 }
 
+function readSavedPosition() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(positionStorageKey.value) || 'null');
+    if (!saved || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return;
+    overlayPosition.value = { x: saved.x, y: saved.y };
+  } catch {
+    // Local storage is optional; a blocked or malformed value should not affect PRD reading.
+  }
+}
+
+function savePosition() {
+  try {
+    window.localStorage.setItem(positionStorageKey.value, JSON.stringify(overlayPosition.value));
+  } catch {
+    // Local storage is optional; the position still works for the current session.
+  }
+}
+
+function getWorkspaceRect() {
+  return panelRef.value?.closest('.page-workspace')?.getBoundingClientRect() || null;
+}
+
+function clamp(value, min, max) {
+  const lower = Math.min(min, max);
+  const upper = Math.max(min, max);
+  return Math.min(Math.max(value, lower), upper);
+}
+
+function getPositionBounds(metrics) {
+  const workspaceRect = getWorkspaceRect();
+  if (!workspaceRect) return null;
+
+  return {
+    minX: workspaceRect.left + 10 - metrics.baseLeft,
+    maxX: workspaceRect.right - 10 - metrics.width - metrics.baseLeft,
+    minY: workspaceRect.top + 10 - metrics.baseTop,
+    maxY: workspaceRect.bottom - 10 - metrics.height - metrics.baseTop,
+  };
+}
+
+function constrainOverlayPosition() {
+  if (props.layoutMode !== 'overlay' || isCompactViewport.value || !panelRef.value) return;
+
+  const panelRect = panelRef.value.getBoundingClientRect();
+  const metrics = {
+    baseLeft: panelRect.left - overlayPosition.value.x,
+    baseTop: panelRect.top - overlayPosition.value.y,
+    width: panelRect.width,
+    height: panelRect.height,
+  };
+  const bounds = getPositionBounds(metrics);
+  if (!bounds) return;
+
+  overlayPosition.value = {
+    x: clamp(overlayPosition.value.x, bounds.minX, bounds.maxX),
+    y: clamp(overlayPosition.value.y, bounds.minY, bounds.maxY),
+  };
+}
+
+function updateViewportMode() {
+  isCompactViewport.value = window.matchMedia('(max-width: 760px)').matches;
+  if (isCompactViewport.value) {
+    overlayPosition.value = { x: 0, y: 0 };
+    return;
+  }
+
+  constrainOverlayPosition();
+}
+
+function schedulePositionConstraint() {
+  window.requestAnimationFrame(() => constrainOverlayPosition());
+}
+
+function handleHeaderPointerDown(event) {
+  if (props.layoutMode !== 'overlay' || isCompactViewport.value) return;
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+  const target = event.target;
+  if (target?.closest?.('button, a, input, select, textarea, [role="button"]')) return;
+
+  const panel = panelRef.value;
+  const workspaceRect = getWorkspaceRect();
+  if (!panel || !workspaceRect) return;
+
+  const panelRect = panel.getBoundingClientRect();
+  dragState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    startPosition: { ...overlayPosition.value },
+    baseLeft: panelRect.left - overlayPosition.value.x,
+    baseTop: panelRect.top - overlayPosition.value.y,
+    width: panelRect.width,
+    height: panelRect.height,
+  };
+  isDragging.value = true;
+  event.preventDefault();
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+}
+
+function handleHeaderPointerMove(event) {
+  if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+  event.preventDefault();
+  const bounds = getPositionBounds(dragState);
+  if (!bounds) return;
+
+  overlayPosition.value = {
+    x: clamp(dragState.startPosition.x + event.clientX - dragState.startX, bounds.minX, bounds.maxX),
+    y: clamp(dragState.startPosition.y + event.clientY - dragState.startY, bounds.minY, bounds.maxY),
+  };
+}
+
+function finishHeaderDrag(event) {
+  if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+  if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+  dragState = null;
+  isDragging.value = false;
+  savePosition();
+}
+
 onMounted(() => {
   document.addEventListener('pointerdown', handleOutsideOutline);
+  readSavedPosition();
+  updateViewportMode();
+  window.addEventListener('resize', updateViewportMode);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleOutsideOutline);
+  window.removeEventListener('resize', updateViewportMode);
 });
+
+watch(
+  () => props.layoutMode,
+  (mode) => {
+    if (mode === 'overlay') {
+      schedulePositionConstraint();
+    } else {
+      dragState = null;
+      isDragging.value = false;
+    }
+  },
+);
 
 function normalizeDocument(entry) {
   const path = typeof entry === 'string' ? entry : entry?.path || entry?.file || '';
@@ -85,7 +241,7 @@ const documentUrl = computed(
   () =>
     router.resolve({
       path: `/p/${props.projectId}/docs`,
-      query: { file: activeDocumentPath.value },
+      query: { file: activeDocumentPath.value, ...(props.documentAnchor ? { anchor: props.documentAnchor } : {}) },
     }).href,
 );
 function openDocumentWindow() {
@@ -111,8 +267,21 @@ function moveSearchMatch(step) {
 </script>
 
 <template>
-  <section class="prd-review-pane" :class="`prd-review-pane--${layoutMode}`">
-    <header class="prd-review-pane__header">
+  <section
+    ref="panelRef"
+    class="prd-review-pane"
+    :class="[`prd-review-pane--${layoutMode}`, { 'is-dragging': isDragging }]"
+    :style="overlayStyle"
+  >
+    <header
+      class="prd-review-pane__header"
+      :class="{ 'is-draggable': layoutMode === 'overlay' && !isCompactViewport }"
+      :title="layoutMode === 'overlay' && !isCompactViewport ? '拖动标题栏移动 PRD 浮层' : undefined"
+      @pointerdown="handleHeaderPointerDown"
+      @pointermove="handleHeaderPointerMove"
+      @pointerup="finishHeaderDrag"
+      @pointercancel="finishHeaderDrag"
+    >
       <div class="prd-review-pane__leading">
         <span class="prd-review-pane__document-icon"
           ><el-icon><Document /></el-icon
@@ -240,6 +409,7 @@ function moveSearchMatch(step) {
         :embedded="true"
         :outline-visible="outlineVisible"
         :document-path="activeDocumentPath"
+        :document-anchor="documentAnchor"
       />
     </div>
   </section>
@@ -485,6 +655,22 @@ function moveSearchMatch(step) {
   border: 0.5px solid rgb(0 0 0 / 12%);
   border-radius: 18px;
   box-shadow: 0 24px 70px rgb(0 0 0 / 22%);
+  will-change: transform;
+}
+
+.prd-review-pane__header.is-draggable {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.prd-review-pane__header.is-draggable:active,
+.prd-review-pane.is-dragging .prd-review-pane__header {
+  cursor: grabbing;
+}
+
+.prd-review-pane.is-dragging {
+  box-shadow: 0 28px 82px rgb(0 0 0 / 26%);
 }
 
 .prd-review-pane__header {

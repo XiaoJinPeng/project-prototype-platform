@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const PAGE_PATH_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ENTRY_KINDS = new Set(['client', 'docs', 'mobile']);
-const PUBLIC_DIRECTORIES = new Set(['assets', 'data', 'mobile']);
+const PUBLIC_DIRECTORIES = new Set(['.platform', 'assets', 'data', 'mobile']);
 const PUBLIC_EXTENSIONS = new Set([
   '.avif',
   '.css',
@@ -383,6 +383,25 @@ function readJsonBody(req) {
   });
 }
 
+function normalizePrdBindingsPayload(projectId, payload) {
+  const bindings = Array.isArray(payload?.bindings) ? payload.bindings.slice(0, 1000) : [];
+  return {
+    schemaVersion: 1,
+    projectId,
+    bindings: bindings.filter((binding) => binding?.pagePath && binding?.target && binding?.prd),
+  };
+}
+
+async function readPrdBindingsFile(projectRoot, projectId) {
+  const filePath = path.join(projectRoot, '.platform', 'prd-bindings.json');
+  try {
+    return normalizePrdBindingsPayload(projectId, JSON.parse(await fs.readFile(filePath, 'utf8')));
+  } catch (error) {
+    if (error.code === 'ENOENT') return normalizePrdBindingsPayload(projectId, {});
+    throw error;
+  }
+}
+
 function requiredText(value, label, fallback = '') {
   const source = value === undefined || value === null || value === '' ? fallback : value;
   const text = String(source).trim();
@@ -686,6 +705,11 @@ export function projectPackagesPlugin({ projectsRoot }) {
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(() => {
           server.ws.send({ type: 'custom', event: 'project-packages:changed' });
+          const relativePath = toWebPath(path.relative(root, absolutePath));
+          const bindingChange = /^([a-z][a-z0-9-]*)\/\.platform\/prd-bindings\.json$/i.exec(relativePath);
+          if (bindingChange) {
+            server.ws.send({ type: 'custom', event: 'prd-bindings:changed', data: { projectId: bindingChange[1] } });
+          }
           if (/project\.json$|page-definitions\.js$|[\\/]views[\\/].+\.vue$/i.test(absolutePath)) {
             server.ws.send({ type: 'full-reload' });
           }
@@ -694,6 +718,44 @@ export function projectPackagesPlugin({ projectsRoot }) {
 
       server.middlewares.use(async (req, res, next) => {
         const requestUrl = new URL(req.url || '/', 'http://localhost');
+        if (requestUrl.pathname === '/__projects/prd-bindings') {
+          const projectId = requestUrl.searchParams.get('project') || '';
+          if (!PROJECT_ID_PATTERN.test(projectId)) {
+            sendJson(res, { message: '项目 ID 无效。' }, 400);
+            return;
+          }
+          const projectRoot = path.join(root, projectId);
+          if (req.method === 'GET') {
+            try {
+              sendJson(res, await readPrdBindingsFile(projectRoot, projectId));
+            } catch (error) {
+              sendJson(res, { message: 'PRD 关联配置读取失败。', detail: error.message }, 500);
+            }
+            return;
+          }
+          if (req.method !== 'POST') {
+            res.statusCode = 405;
+            res.setHeader('Allow', 'GET, POST');
+            sendJson(res, { message: 'PRD 关联配置只支持 GET 或 POST。' }, 405);
+            return;
+          }
+          if (!isLocalRequest(req)) {
+            sendJson(res, { message: 'PRD 关联编辑仅允许本机开发环境使用。' }, 403);
+            return;
+          }
+          try {
+            const body = await readJsonBody(req);
+            const payload = normalizePrdBindingsPayload(projectId, body);
+            const filePath = path.join(projectRoot, '.platform', 'prd-bindings.json');
+            await fs.mkdir(path.dirname(filePath), { recursive: true });
+            await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+            server.ws.send({ type: 'custom', event: 'prd-bindings:changed', data: { projectId } });
+            sendJson(res, payload);
+          } catch (error) {
+            sendJson(res, { message: 'PRD 关联配置保存失败。', detail: error.message }, 400);
+          }
+          return;
+        }
         if (requestUrl.pathname === '/__projects/create' || requestUrl.pathname === '/__projects/update') {
           if (!isLocalRequest(req)) {
             sendJson(res, { message: '项目管理接口仅允许本机访问。' }, 403);

@@ -95,18 +95,27 @@
           <RouterView />
         </main>
         <PrdReviewPanel
-          v-if="developerMode && prdPanelOpen && prdDocumentPath && !exportConfig"
+          v-if="prdPanelOpen && prdDocumentPath && !exportConfig"
           :project-id="props.projectId"
           :document-path="prdDocumentPath"
           :document-paths="prdDocuments"
           :page-title="currentTitle"
+          :document-anchor="prdDocumentAnchor"
           :layout-mode="prdLayoutMode"
-          @close="prdPanelOpen = false"
+          @close="closePrdPanel"
           @open-window="openDocumentWindow"
           @update:layout-mode="prdLayoutMode = $event"
         />
       </div>
     </div>
+    <PrdAssociationLayer
+      v-if="!exportConfig"
+      :project-id="props.projectId"
+      :page-path="route.path"
+      :enabled="true"
+      :can-edit="developerMode"
+      @open="openPrdBinding"
+    />
   </div>
 </template>
 
@@ -114,6 +123,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Document, Download } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
+import PrdAssociationLayer from './PrdAssociationLayer.vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -164,6 +174,7 @@ const currentLocale = computed({
 const developerModeOverride = ref(false);
 const developerMode = computed(() => platformSettings.developerMode || developerModeOverride.value);
 const prdPanelOpen = ref(false);
+const prdTarget = ref(null);
 const prdLayoutMode = ref('split');
 
 const currentTitle = computed(() => route.meta.title || route.name || '工作台');
@@ -180,9 +191,8 @@ const prdDocuments = computed(() => {
   const entries = Array.isArray(raw) ? raw : raw ? [raw] : [];
   return entries.map(normalizePrdDocument).filter(Boolean);
 });
-const prdDocumentPath = computed(() => {
-  return prdDocuments.value[0]?.path || '';
-});
+const prdDocumentPath = computed(() => prdTarget.value?.documentPath || prdDocuments.value[0]?.path || '');
+const prdDocumentAnchor = computed(() => prdTarget.value?.anchor || '');
 const sourcePath = computed(() => (typeof route.meta.source === 'string' ? route.meta.source : ''));
 
 watch(
@@ -203,6 +213,7 @@ watch(
 watch(
   () => route.fullPath,
   () => {
+    prdTarget.value = null;
     if (!prdDocumentPath.value) prdPanelOpen.value = false;
   },
 );
@@ -266,6 +277,16 @@ async function setDeveloperMode(enabled) {
 function openDocumentWindow(documentUrl) {
   if (typeof window === 'undefined') return;
   window.open(documentUrl, '_blank', 'noopener,noreferrer');
+}
+
+function openPrdBinding(target) {
+  prdTarget.value = target;
+  prdPanelOpen.value = true;
+}
+
+function closePrdPanel() {
+  prdPanelOpen.value = false;
+  prdTarget.value = null;
 }
 
 async function handleSourceDownload() {

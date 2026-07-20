@@ -202,6 +202,7 @@ const props = defineProps({
   embedded: { type: Boolean, default: false },
   outlineVisible: { type: Boolean, default: false },
   documentPath: { type: String, default: '' },
+  documentAnchor: { type: String, default: '' },
 });
 const project = computed(() => getProject(props.projectId));
 
@@ -230,6 +231,7 @@ const previewImageUrl = ref('');
 const previewImageAlt = ref('');
 const embeddedDocumentPath = ref(props.documentPath);
 let documentSearchMarks = [];
+const embeddedDocumentAnchor = ref(props.documentAnchor);
 let activeRenderId = 0;
 let stopDocumentsChanged = () => {};
 let mermaidApi;
@@ -284,6 +286,9 @@ const requestedDocumentPath = computed(() =>
 );
 const defaultExpandedKeys = computed(() =>
   treeData.value.filter((node) => !node.archived).map((node) => node.id),
+);
+const requestedDocumentAnchor = computed(() =>
+  String(props.embedded ? embeddedDocumentAnchor.value : route.query.anchor || '').trim(),
 );
 const formattedUpdatedAt = computed(() => {
   if (!currentDocument.value?.updatedAt) return '';
@@ -458,6 +463,7 @@ async function loadCurrentDocument() {
     if (renderId !== activeRenderId) return;
     renderedHtml.value = prepareRenderedHtml(source, currentDocument.value.path);
     await nextTick();
+    scrollToDocumentAnchor(requestedDocumentAnchor.value);
     readerScrollRef.value?.scrollTo({ top: 0 });
     await renderMermaidBlocks(renderId);
     updateActiveHeading();
@@ -501,6 +507,18 @@ function handleArticleClick(event) {
     previewImageAlt.value = image.alt || currentDocument.value?.title || '';
     imagePreviewVisible.value = true;
   }
+}
+function scrollToDocumentAnchor(anchor) {
+  if (!anchor || !articleRef.value) return false;
+  const target = articleRef.value.querySelector('#' + CSS.escape(anchor));
+  if (!target) return false;
+
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  activeHeadingId.value = target.id;
+  target.classList.remove('is-prd-anchor-target');
+  window.requestAnimationFrame(() => target.classList.add('is-prd-anchor-target'));
+  window.setTimeout(() => target.classList.remove('is-prd-anchor-target'), 1800);
+  return true;
 }
 
 function scrollToHeading(headingId) {
@@ -580,6 +598,14 @@ watch(
     if (!props.embedded) return;
     embeddedDocumentPath.value = documentPath;
     if (documents.value.length && documentPath) selectCurrentDocument(documentPath);
+  },
+);
+watch(
+  () => props.documentAnchor,
+  (anchor) => {
+    if (!props.embedded) return;
+    embeddedDocumentAnchor.value = anchor || '';
+    nextTick(() => scrollToDocumentAnchor(embeddedDocumentAnchor.value));
   },
 );
 
@@ -1029,6 +1055,20 @@ onBeforeUnmount(() => {
   color: #3a3a3c;
   font-size: 16px;
   line-height: 1.85;
+}
+:deep(.markdown-body .is-prd-anchor-target) {
+  border-radius: 10px;
+  background: rgb(var(--app-color-primary-rgb) / 9%);
+  box-shadow: 0 0 0 6px rgb(var(--app-color-primary-rgb) / 5%);
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :deep(.markdown-body .is-prd-anchor-target) {
+    transition: none;
+  }
 }
 :deep(.markdown-body h1) {
   margin: 0 0 28px;
