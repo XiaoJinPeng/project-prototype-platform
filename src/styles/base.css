@@ -108,6 +108,24 @@ body {
   background: var(--page-bg);
 }
 
+/* Keep platform navigation responsive without animating the client shell. */
+.platform-route-enter-active,
+.platform-route-leave-active {
+  transition:
+    opacity var(--platform-motion-base) cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--platform-motion-base) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.platform-route-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.platform-route-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -963,6 +981,16 @@ body:has(.platform-page) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .platform-route-enter-active,
+  .platform-route-leave-active {
+    transition: opacity 80ms linear;
+  }
+
+  .platform-route-enter-from,
+  .platform-route-leave-to {
+    transform: none;
+  }
+
   .platform-page *,
   .platform-page *::before,
   .platform-page *::after,

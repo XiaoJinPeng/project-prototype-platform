@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { getProject, getProjectEntryPath, installedProjects } from '../config/project-packages';
+import { applyProjectTheme } from '../config/theme';
 
 const route = useRoute();
 const router = useRouter();
@@ -44,6 +45,14 @@ const selectedProjectId = computed({
 });
 
 const selectedProject = computed(() => getProject(selectedProjectId.value));
+
+watch(
+  selectedProject,
+  (project) => {
+    applyProjectTheme(project || null);
+  },
+  { immediate: true },
+);
 
 const clientEntries = computed(() =>
   [...(selectedProject.value?.entries || [])]
@@ -141,7 +150,10 @@ function openRecentActivity() {
 }
 
 function openProjectSettings() {
-  router.push({ path: '/tools/projects', query: { project: selectedProjectId.value } });
+  router.push({
+    path: '/tools/projects',
+    query: { project: selectedProjectId.value, edit: '1' },
+  });
 }
 
 function openPageTransfer() {
@@ -178,7 +190,7 @@ onBeforeUnmount(() => {
                 class="candidate-nav-button flex h-full items-center font-label-md text-label-md transition-colors"
                 :class="
                   hasSelectedProject
-                    ? 'border-b-2 border-primary pb-1 font-medium text-primary'
+                    ? 'border-b-2 border-theme-primary pb-1 font-medium text-theme-primary'
                     : 'text-on-surface-variant hover:text-on-surface'
                 "
                 aria-haspopup="listbox"
@@ -206,7 +218,7 @@ onBeforeUnmount(() => {
                     <span>不选择项目</span>
                     <span
                       v-if="!hasSelectedProject"
-                      class="material-symbols-outlined text-[18px] text-[#007AFF]"
+                      class="material-symbols-outlined text-[18px] text-theme-primary"
                     >
                       check
                     </span>
@@ -224,7 +236,7 @@ onBeforeUnmount(() => {
                     <span>{{ project.name }}</span>
                     <span
                       v-if="project.id === selectedProjectId"
-                      class="material-symbols-outlined text-[18px] text-[#007AFF]"
+                      class="material-symbols-outlined text-[18px] text-theme-primary"
                     >
                       check
                     </span>
@@ -260,7 +272,7 @@ onBeforeUnmount(() => {
           <RouterLink
             v-if="showConsole"
             to="/tools/projects"
-            class="hidden items-center justify-center rounded-full bg-primary px-4 py-1.5 font-label-md text-label-md text-white transition-opacity hover:opacity-80 active:scale-95 md:flex"
+            class="hidden items-center justify-center rounded-full bg-theme-primary px-4 py-1.5 font-label-md text-label-md text-white transition-opacity hover:bg-theme-hover hover:opacity-80 active:scale-95 md:flex"
           >
             新建项目
           </RouterLink>
@@ -301,7 +313,7 @@ onBeforeUnmount(() => {
           <p class="home-eyebrow">PROJECT WORKSPACE</p>
           <div class="mb-2 flex items-center gap-3">
             <span
-              class="material-symbols-outlined text-3xl text-primary"
+              class="material-symbols-outlined text-3xl text-theme-primary"
               style="font-variation-settings: 'FILL' 1"
             >
               point_of_sale
@@ -310,7 +322,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex items-center gap-2">
             <span
-              class="rounded-full border border-[#CCE0FF] bg-[#E5F0FF] px-2 py-0.5 font-label-sm text-label-sm text-[#0058BC]"
+              class="rounded-full border border-theme-primary/25 bg-theme-primary/10 px-2 py-0.5 font-label-sm text-label-sm text-theme-primary"
             >
               {{ hasSelectedProject ? `版本 v${projectVersion}` : '尚未选择项目' }}
             </span>
@@ -334,7 +346,7 @@ onBeforeUnmount(() => {
           </button>
           <button
             type="button"
-            class="flex items-center gap-2 rounded-lg bg-[#007AFF] px-6 py-2 font-label-md text-label-md text-white shadow-sm transition-colors hover:bg-blue-600"
+            class="flex items-center gap-2 rounded-lg bg-theme-primary px-6 py-2 font-label-md text-label-md text-white shadow-sm transition-colors hover:bg-theme-hover"
             @click="openPageTransfer"
           >
             <span class="material-symbols-outlined text-[18px]">rocket_launch</span>
@@ -352,12 +364,12 @@ onBeforeUnmount(() => {
                 v-for="entry in clientEntries"
                 :key="entry.id"
                 :to="entry.to"
-                class="premium-card candidate-client-card group cursor-pointer p-lg transition-all hover:border-primary/30 hover:shadow-md"
+                class="premium-card candidate-client-card group cursor-pointer p-lg transition-all hover:border-theme-primary/30 hover:shadow-md"
               >
                 <div
-                  class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-surface-container-low transition-colors group-hover:bg-[#E5F0FF]"
+                  class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-surface-container-low transition-colors group-hover:bg-theme-primary/10"
                 >
-                  <span class="material-symbols-outlined text-on-surface-variant group-hover:text-[#007AFF]">
+                  <span class="material-symbols-outlined text-on-surface-variant group-hover:text-theme-primary">
                     {{ entry.icon }}
                   </span>
                 </div>
@@ -368,7 +380,7 @@ onBeforeUnmount(() => {
                   {{ entry.displayDescription }}
                 </p>
                 <div
-                  class="mt-auto flex items-center justify-between font-label-sm text-label-sm text-[#007AFF]"
+                  class="mt-auto flex items-center justify-between font-label-sm text-label-sm text-theme-primary"
                 >
                   <span>进入系统</span>
                   <span
@@ -399,14 +411,14 @@ onBeforeUnmount(() => {
                     >产品文档与原型说明</span
                   >
                 </div>
-                <span class="material-symbols-outlined text-primary">description</span>
+                <span class="material-symbols-outlined text-theme-primary">description</span>
               </div>
               <div v-if="documentEntries.length" class="space-y-3">
                 <RouterLink
                   v-for="entry in documentEntries"
                   :key="entry.id"
                   :to="entry.to"
-                  class="flex items-center justify-between rounded-lg px-3 py-2 font-body-sm text-body-sm text-on-surface-variant transition-colors hover:bg-[#F2F2F7] hover:text-primary"
+                  class="flex items-center justify-between rounded-lg px-3 py-2 font-body-sm text-body-sm text-on-surface-variant transition-colors hover:bg-[#F2F2F7] hover:text-theme-primary"
                 >
                   <span class="flex items-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">description</span>
@@ -474,7 +486,7 @@ onBeforeUnmount(() => {
       >
         <RouterLink
           to="/components"
-          class="font-label-sm text-label-sm text-on-surface-variant transition-colors hover:text-primary"
+          class="font-label-sm text-label-sm text-on-surface-variant transition-colors hover:text-theme-primary"
         >
           组件规范
         </RouterLink>
@@ -491,7 +503,7 @@ onBeforeUnmount(() => {
   min-height: 100vh;
   background:
     radial-gradient(circle at 12% 4%, rgb(var(--app-color-primary-rgb) / 7%), transparent 25rem),
-    var(--platform-color-page);
+    var(--app-color-page);
   color: var(--platform-color-text);
 }
 

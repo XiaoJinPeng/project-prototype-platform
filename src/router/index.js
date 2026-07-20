@@ -90,43 +90,43 @@ const routes = [
     path: '/',
     name: 'home',
     component: () => import('../views/HomeView.vue'),
-    meta: { title: projectConfig.platformTitle },
+    meta: { title: projectConfig.platformTitle, transition: 'platform' },
   },
   {
     path: '/home-v5-preview',
     name: 'home-v5-preview',
     component: () => import('../views/HomeView.vue'),
-    meta: { title: '首页候选稿' },
+    meta: { title: '首页候选稿', transition: 'platform' },
   },
   {
     path: '/tools/console',
     name: 'tools-console',
     component: () => import('../views/tools/ConsoleView.vue'),
-    meta: { title: '控制台' },
+    meta: { title: '控制台', transition: 'platform', theme: 'platform' },
   },
   {
     path: '/components',
     name: 'design-system',
     component: () => import('../views/DesignSystemView.vue'),
-    meta: { title: '组件规范' },
+    meta: { title: '组件规范', transition: 'platform', theme: 'platform' },
   },
   {
     path: '/tools/page-transfer',
     name: 'page-transfer',
     component: () => import('../views/tools/PageTransferView.vue'),
-    meta: { title: '页面导入导出' },
+    meta: { title: '页面导入导出', transition: 'platform', theme: 'platform' },
   },
   {
     path: '/tools/projects',
     name: 'project-packages-status',
     component: () => import('../views/tools/ProjectPackagesView.vue'),
-    meta: { title: '项目包状态' },
+    meta: { title: '项目包状态', transition: 'platform', theme: 'platform' },
   },
   {
     path: '/tools/project-routes',
     name: 'project-routes',
     component: () => import('../views/tools/ProjectRoutesView.vue'),
-    meta: { title: '路由菜单管理' },
+    meta: { title: '路由菜单管理', theme: 'platform' },
   },
   ...createInstalledProjectRoutes(),
   ...createLegacyProjectRedirects(),
@@ -154,7 +154,7 @@ const router = createRouter({
 router.afterEach((to) => {
   const queryProjectId = typeof to.query.project === 'string' ? to.query.project : '';
   const project = getProject(to.meta.projectId || queryProjectId);
-  applyProjectTheme(project);
+  applyProjectTheme(to.meta.theme === 'platform' ? null : project);
   document.title = `${to.meta.title || projectConfig.platformTitle} - ${project?.name || projectConfig.name}`;
 });
 
