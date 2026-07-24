@@ -138,8 +138,12 @@ const form = reactive({
   summary: '',
 });
 let layoutObserver = null;
+let overlayRefreshFrame = 0;
+let overlayRefreshDisposed = false;
 
-const currentBindings = computed(() => bindings.value.filter((binding) => binding.pagePath === props.pagePath));
+const currentBindings = computed(() =>
+  bindings.value.filter((binding) => binding.pagePath === props.pagePath),
+);
 
 const previewStyle = computed(() => {
   if (!previewRect.value) return {};
@@ -176,7 +180,8 @@ function candidateFor(target) {
   let current = target.nodeType === Node.ELEMENT_NODE ? target : target.parentElement;
   while (current && current !== root) {
     const businessClasses = Array.from(current.classList || []).filter(isBusinessClass);
-    if (businessClasses.length || ['BUTTON', 'A', 'SECTION', 'ARTICLE'].includes(current.tagName)) return current;
+    if (businessClasses.length || ['BUTTON', 'A', 'SECTION', 'ARTICLE'].includes(current.tagName))
+      return current;
     current = current.parentElement;
   }
   return target;
@@ -212,7 +217,9 @@ function targetSnapshot(root, element) {
   return {
     domPath: getDomPath(root, element),
     tag: element.tagName,
-    classes: Array.from(element.classList || []).filter(isBusinessClass).slice(0, 8),
+    classes: Array.from(element.classList || [])
+      .filter(isBusinessClass)
+      .slice(0, 8),
     text: targetText(element),
   };
 }
@@ -279,7 +286,12 @@ function isVisibleTarget(element, rect, bounds) {
   const style = window.getComputedStyle(element);
   if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
 
-  return rect.right > bounds.left && rect.left < bounds.right && rect.bottom > bounds.top && rect.top < bounds.bottom;
+  return (
+    rect.right > bounds.left &&
+    rect.left < bounds.right &&
+    rect.bottom > bounds.top &&
+    rect.top < bounds.bottom
+  );
 }
 
 function refreshOverlayItems() {
@@ -308,9 +320,17 @@ function refreshOverlayItems() {
     .filter(Boolean);
 }
 
+function requestOverlayRefresh() {
+  if (overlayRefreshDisposed || overlayRefreshFrame) return;
+  overlayRefreshFrame = window.requestAnimationFrame(() => {
+    overlayRefreshFrame = 0;
+    refreshOverlayItems();
+  });
+}
+
 function scheduleOverlayRefresh() {
   void nextTick(() => {
-    window.requestAnimationFrame(refreshOverlayItems);
+    requestOverlayRefresh();
   });
 }
 
@@ -322,7 +342,7 @@ function observePageLayout() {
 
   layoutObserver?.disconnect();
   layoutObserver = new ResizeObserver(() => {
-    window.requestAnimationFrame(refreshOverlayItems);
+    requestOverlayRefresh();
   });
   layoutObserver.observe(root);
 
@@ -387,11 +407,7 @@ function openBindingDialog(element, binding = null) {
   if (!root || !element) return;
   const target = binding?.target || targetSnapshot(root, element);
   selectedElement.value = element;
-  targetDescription.value = [
-    target.tag,
-    target.classes?.length ? '.' + target.classes[0] : '',
-    target.text,
-  ]
+  targetDescription.value = [target.tag, target.classes?.length ? '.' + target.classes[0] : '', target.text]
     .filter(Boolean)
     .join(' · ');
   editingBindingId.value = binding?.id || '';
@@ -455,7 +471,8 @@ async function saveBinding() {
   }
 
   const target = editingBindingId.value
-    ? bindings.value.find((binding) => binding.id === editingBindingId.value)?.target || targetSnapshot(root, element)
+    ? bindings.value.find((binding) => binding.id === editingBindingId.value)?.target ||
+      targetSnapshot(root, element)
     : targetSnapshot(root, element);
   const binding = {
     id: editingBindingId.value || createBindingId(props.pagePath, target),
@@ -464,7 +481,8 @@ async function saveBinding() {
     prd: {
       document: form.documentPath,
       anchor: form.anchor,
-      label: form.label.trim() || headings.value.find((heading) => heading.id === form.anchor)?.text || '查看 PRD',
+      label:
+        form.label.trim() || headings.value.find((heading) => heading.id === form.anchor)?.text || '查看 PRD',
       summary: form.summary.trim(),
     },
   };
@@ -555,7 +573,6 @@ watch(
       previewRect.value = null;
     }
   },
-
 );
 watch(
   () => props.pagePath,
@@ -575,22 +592,26 @@ watch(
 );
 
 onMounted(() => {
+  overlayRefreshDisposed = false;
   void loadData();
   observePageLayout();
   document.addEventListener('keydown', handleShortcut);
   document.addEventListener('pointermove', handlePointerMove, true);
   document.addEventListener('pointerdown', handlePointerDown, true);
-  window.addEventListener('resize', refreshOverlayItems);
-  window.addEventListener('scroll', refreshOverlayItems, true);
+  window.addEventListener('resize', requestOverlayRefresh);
+  window.addEventListener('scroll', requestOverlayRefresh, true);
   stopBindingsChanged.value = onPrdBindingsChanged(props.projectId, loadData);
 });
 
 onBeforeUnmount(() => {
+  overlayRefreshDisposed = true;
   document.removeEventListener('keydown', handleShortcut);
   document.removeEventListener('pointermove', handlePointerMove, true);
   document.removeEventListener('pointerdown', handlePointerDown, true);
-  window.removeEventListener('resize', refreshOverlayItems);
-  window.removeEventListener('scroll', refreshOverlayItems, true);
+  window.removeEventListener('resize', requestOverlayRefresh);
+  window.removeEventListener('scroll', requestOverlayRefresh, true);
+  window.cancelAnimationFrame(overlayRefreshFrame);
+  overlayRefreshFrame = 0;
   layoutObserver?.disconnect();
   layoutObserver = null;
   stopBindingsChanged.value();

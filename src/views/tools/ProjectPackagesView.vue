@@ -169,8 +169,7 @@ function openEditDialog(project) {
 }
 
 function handleDialogSaved({ message }) {
-  notice.value = `${message} 如首页没有立即出现变化，请重启一次 Vite 开发服务。`;
-  loadPackages();
+  notice.value = `${message} 开发服务正在重新载入项目配置。`;
 }
 
 onMounted(async () => {

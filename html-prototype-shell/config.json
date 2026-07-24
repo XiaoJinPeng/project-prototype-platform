@@ -1,0 +1,23 @@
+{
+  "port": 5190,
+  "prototypeRoot": "D:/工作文件/RIMORental/02_原型和PRD/原型",
+  "docsRoot": "D:/工作文件/RIMORental/02_原型和PRD/PRD",
+  "hideSelectors": [
+    "#app > aside",
+    "#app > main > header",
+    "#app > nav",
+    "#app > header",
+    ".app-sidebar",
+    ".topbar",
+    ".prototype-sidebar",
+    ".prototype-topbar",
+    "header.h-16.bg-white",
+    "header[class*='h-16'][class*='bg-white']",
+    ".layout-header",
+    ".app-header",
+    ".page-header",
+    ".sidebar",
+    ".sidebar-menu",
+    ".layout-sidebar"
+  ]
+}

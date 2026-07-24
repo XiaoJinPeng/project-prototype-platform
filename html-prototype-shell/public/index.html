@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RIMO Rental 原型工作台</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell" id="shell">
+      <aside class="app-sidebar" id="pageIndex">
+        <div class="sidebar-brand">
+          <div class="brand-mark" aria-hidden="true">R</div>
+          <div class="brand-copy">
+            <strong>RIMO Rental</strong>
+            <span>原型工作台</span>
+          </div>
+        </div>
+
+        <div class="sidebar-search">
+          <label class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.4-3.4"></path></svg>
+            <input id="pageSearch" type="search" placeholder="搜索业务页面" autocomplete="off" />
+          </label>
+        </div>
+
+        <nav class="tree" id="pageTree" aria-label="业务页面导航"></nav>
+
+        <div class="sidebar-footer">
+          <span id="pageCount">正在扫描页面</span>
+          <button class="sidebar-refresh" id="refreshButton" type="button" title="重新扫描页面" aria-label="重新扫描页面">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg>
+          </button>
+        </div>
+      </aside>
+
+      <section class="app-main">
+        <header class="app-topbar">
+          <div class="topbar-leading">
+            <button class="icon-button menu-button" id="togglePagesButton" type="button" title="收起业务菜单" aria-label="收起业务菜单" aria-expanded="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+            </button>
+            <nav class="breadcrumb" aria-label="当前位置">
+              <span>原型</span>
+              <i>/</i>
+              <span id="currentFolder">业务页面</span>
+              <i>/</i>
+              <strong id="currentTitle">选择页面</strong>
+            </nav>
+          </div>
+
+          <div class="topbar-actions">
+            <span class="source-path" id="currentPath" title="尚未选择页面">尚未选择页面</span>
+            <button class="toolbar-button" id="togglePrdButton" type="button" aria-controls="prdPanel" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"></path><path d="M14 3v5h5M9 12h6M9 16h6"></path></svg>
+              <span id="prdToggleLabel">查看 PRD</span>
+              <i class="binding-status" aria-hidden="true"></i>
+            </button>
+          </div>
+        </header>
+
+        <div class="workspace">
+          <main class="prototype-stage">
+            <div class="frame-wrap">
+              <iframe id="prototypeFrame" title="HTML 原型页面" loading="eager"></iframe>
+              <div class="frame-loading hidden" id="frameLoading" role="status">
+                <span></span>
+                <strong>正在加载业务页面</strong>
+              </div>
+              <div class="empty-stage" id="emptyStage">
+                <div class="empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"></path><path d="M4 9h16M8 5v4"></path></svg>
+                </div>
+                <strong>从左侧选择一个业务页面</strong>
+                <span>原始 HTML 将以内容区模式运行，页面交互和弹窗会继续保留。</span>
+              </div>
+            </div>
+          </main>
+
+          <aside class="prd-panel" id="prdPanel" aria-hidden="true">
+            <div class="prd-heading">
+              <div class="prd-heading-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"></path><path d="M14 3v5h5M9 12h6M9 16h6"></path></svg>
+            </div>
+            <div class="prd-heading-copy">
+              <span>PRD REVIEW</span>
+                <div class="prd-title-line">
+                  <strong id="prdPanelTitle">需求说明</strong>
+                  <i aria-hidden="true">·</i>
+                  <div class="prd-document-switcher" id="prdDocumentSwitcher">
+                    <button class="prd-document-trigger" id="prdDocumentTrigger" type="button" aria-haspopup="listbox" aria-controls="prdDocumentMenu" aria-expanded="false" disabled>
+                      <span id="docTitle">未关联文档</span>
+                      <span class="prd-document-position hidden" id="prdDocumentPosition"></span>
+                      <svg class="prd-document-chevron hidden" id="prdDocumentChevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"></path></svg>
+                    </button>
+                    <div class="prd-document-menu hidden" id="prdDocumentMenu" role="listbox" aria-label="关联 PRD"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="prd-heading-actions">
+                <button class="icon-button" id="openPrdWindowButton" type="button" title="新窗口打开" aria-label="新窗口打开">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8"></path><path d="M17 13v5H5V6h5"></path></svg>
+                </button>
+                <button class="icon-button" id="closePrdButton" type="button" title="关闭 PRD" aria-label="关闭 PRD">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="prd-toolbar">
+              <div class="prd-mode-group">
+                <span>显示方式</span>
+                <div class="prd-modes" role="group" aria-label="PRD 查看方式">
+                  <button type="button" data-prd-mode="split" aria-pressed="true">固定分屏</button>
+                  <button type="button" data-prd-mode="overlay" aria-pressed="false">浮层</button>
+                </div>
+              </div>
+              <button class="prd-directory-button" id="togglePrdDirectoryButton" type="button" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h4v4H5zM15 5h4v4h-4zM5 15h4v4H5zM15 15h4v4h-4z"></path></svg>
+                <span>查看目录</span>
+              </button>
+            </div>
+
+            <div class="prd-searchbar">
+              <label class="prd-search-input">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.4-3.4"></path></svg>
+                <input id="prdSearchInput" type="search" placeholder="搜索本文" autocomplete="off" />
+              </label>
+              <span class="prd-search-count hidden" id="prdSearchCount">0 / 0</span>
+              <button class="prd-search-action" id="prdSearchPreviousButton" type="button" title="上一个匹配" aria-label="上一个匹配" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+              </button>
+              <button class="prd-search-action" id="prdSearchNextButton" type="button" title="下一个匹配" aria-label="下一个匹配" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+              </button>
+            </div>
+
+            <nav class="prd-outline hidden" id="prdOutline" aria-label="PRD 目录"></nav>
+
+            <div class="prd-state" id="prdState">
+              <div class="empty-icon small" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l1.4-1.4a5 5 0 0 0-7.1-7.1L10.6 5"></path><path d="M14 11a5 5 0 0 0-7.1 0l-1.4 1.4a5 5 0 0 0 7.1 7.1l.8-.8"></path></svg>
+              </div>
+              <strong>当前页面未关联 PRD</strong>
+              <span>可在 bindings.json 中维护页面与需求文档的关联。</span>
+            </div>
+
+            <div class="prd-content hidden" id="prdContent">
+              <div class="prd-reader" id="prdReader">
+                <div class="prd-document-shell">
+                  <div class="prd-document-meta">
+                    <span id="docPath">—</span>
+                    <span id="docUpdatedAt">—</span>
+                  </div>
+                  <article class="doc-body" id="docBody"></article>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>

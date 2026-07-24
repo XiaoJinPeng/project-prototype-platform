@@ -98,7 +98,7 @@
             :disabled="Boolean(exportConfig)"
             text
             size="small"
-            @click="prdPanelOpen = !prdPanelOpen"
+            @click="togglePrdPanel"
           >
             <el-icon><Document /></el-icon>
             {{ prdPanelOpen ? '关闭 PRD' : '查看 PRD' }}
@@ -118,22 +118,32 @@
         </div>
       </header>
 
-      <div class="page-workspace">
-        <main class="page-container" :class="{ 'legacy-page-container': route.meta.legacy }">
+      <div class="page-workspace" :class="workspaceClasses">
+        <main
+          class="page-container"
+          :class="{
+            'legacy-page-container': route.meta.legacy,
+            'html-prototype-page-container': route.meta.htmlPrototype,
+            'route-manager-page-container': route.meta.routeManagerPage,
+          }"
+        >
           <RouterView />
         </main>
-        <PrdReviewPanel
-          v-if="prdPanelOpen && prdDocumentPath && !exportConfig"
-          :project-id="props.projectId"
-          :document-path="prdDocumentPath"
-          :document-paths="prdDocuments"
-          :page-title="currentTitle"
-          :document-anchor="prdDocumentAnchor"
-          :layout-mode="prdLayoutMode"
-          @close="closePrdPanel"
-          @open-window="openDocumentWindow"
-          @update:layout-mode="prdLayoutMode = $event"
-        />
+        <Transition name="prd-pane">
+          <PrdReviewPanel
+            v-if="prdPanelOpen && prdDocumentPath && !exportConfig"
+            :project-id="props.projectId"
+            :document-path="prdDocumentPath"
+            :document-paths="prdDocuments"
+            :page-title="currentTitle"
+            :document-anchor="prdDocumentAnchor"
+            :layout-mode="prdLayoutMode"
+            @close="closePrdPanel"
+            @open-window="openDocumentWindow"
+            @ready="handlePrdPanelReady"
+            @update:layout-mode="prdLayoutMode = $event"
+          />
+        </Transition>
       </div>
     </div>
     <PrdAssociationLayer
@@ -148,7 +158,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Document, Download, Expand, Fold, Menu } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import PrdAssociationLayer from './PrdAssociationLayer.vue';
@@ -156,7 +166,6 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
 import { getProject } from '../config/project-packages';
-import PrdReviewPanel from './PrdReviewPanel.vue';
 import { localeOptions, setLocale } from '../i18n';
 import { translateStaticCopy } from '../i18n/legacy-localizer';
 import { downloadProjectSource } from '../services/project-sources';
@@ -202,6 +211,7 @@ const currentLocale = computed({
 const developerModeOverride = ref(false);
 const developerMode = computed(() => platformSettings.developerMode || developerModeOverride.value);
 const prdPanelOpen = ref(false);
+const prdPanelReady = ref(false);
 const prdTarget = ref(null);
 const prdLayoutMode = ref('split');
 const sidebarCollapsed = ref(false);
@@ -212,6 +222,11 @@ const shellClasses = computed(() => ({
   'sidebar-collapsed': sidebarCollapsed.value && !isNarrowViewport.value,
   'sidebar-drawer-open': mobileSidebarOpen.value,
 }));
+const workspaceClasses = computed(() => ({
+  'prd-panel-open': prdPanelReady.value && prdLayoutMode.value === 'split',
+  'prd-panel-overlay-open': prdPanelReady.value && prdLayoutMode.value === 'overlay',
+}));
+let prdPanelReadyFrame = 0;
 
 const currentTitle = computed(() => route.meta.title || route.name || '工作台');
 function normalizePrdDocument(entry) {
@@ -251,11 +266,12 @@ watch(
   () => {
     prdTarget.value = null;
     closeMobileSidebar();
-    if (!prdDocumentPath.value) prdPanelOpen.value = false;
+    if (!prdDocumentPath.value) closePrdPanel();
   },
 );
 
 const project = computed(() => getProject(props.projectId));
+const PrdReviewPanel = defineAsyncComponent(() => import('./PrdReviewPanel.vue'));
 const availableClients = computed(() => {
   const clients = project.value?.clients || [];
   if (!exportConfig?.clients?.length) return clients;
@@ -312,7 +328,7 @@ async function setDeveloperMode(enabled) {
   } catch (error) {
     ElMessage.error(error.message || '共享开发模式保存失败。');
   }
-  if (!enabled && !developerModeOverride.value) prdPanelOpen.value = false;
+  if (!enabled && !developerModeOverride.value) closePrdPanel();
 }
 
 function openDocumentWindow(documentUrl) {
@@ -325,7 +341,27 @@ function openPrdBinding(target) {
   prdPanelOpen.value = true;
 }
 
+function handlePrdPanelReady() {
+  window.cancelAnimationFrame(prdPanelReadyFrame);
+  prdPanelReadyFrame = window.requestAnimationFrame(() => {
+    if (prdPanelOpen.value) prdPanelReady.value = true;
+    prdPanelReadyFrame = 0;
+  });
+}
+
+function togglePrdPanel() {
+  if (prdPanelOpen.value) {
+    closePrdPanel();
+    return;
+  }
+
+  prdPanelOpen.value = true;
+}
+
 function closePrdPanel() {
+  window.cancelAnimationFrame(prdPanelReadyFrame);
+  prdPanelReadyFrame = 0;
+  prdPanelReady.value = false;
   prdPanelOpen.value = false;
   prdTarget.value = null;
 }
@@ -403,6 +439,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  window.cancelAnimationFrame(prdPanelReadyFrame);
   window.removeEventListener('keydown', handleDeveloperShortcut);
   window.removeEventListener('resize', updateViewportMode);
   document.removeEventListener('keydown', handleSidebarEscape);

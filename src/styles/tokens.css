@@ -33,6 +33,12 @@
   --app-color-surface-subtle: #f8fafc;
   --app-color-surface-muted: #f9fafb;
   --app-color-page: #f5f7fb;
+  --app-font-family-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Segoe UI Symbol', 'Noto Color Emoji';
+  --app-font-family-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   --app-font-size-xs: 12px;
   --app-font-size-sm: 13px;
   --app-font-size-base: 14px;
@@ -69,8 +75,11 @@
   --platform-shadow-float: 0 20px 56px rgb(0 0 0 / 16%);
   --platform-motion-fast: 120ms;
   --platform-motion-base: 180ms;
+  --platform-motion-panel: 340ms;
+  --platform-ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Element Plus follows the same project theme token. */
+  --el-font-family: var(--app-font-family-sans);
   --el-color-primary: var(--app-color-primary);
   --el-color-primary-light-3: color-mix(in srgb, var(--app-color-primary) 70%, white);
   --el-color-primary-light-5: color-mix(in srgb, var(--app-color-primary) 50%, white);

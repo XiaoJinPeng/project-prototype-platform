@@ -23,7 +23,7 @@
     "audit:theme": "node scripts/audit-theme-tokens.cjs",
     "audit:naming": "node scripts/audit-template-naming.cjs",
     "generate:page": "node scripts/generate-page.mjs",
-    "lint": "eslint src scripts plugins tests projects vite.config.js vitest.config.js playwright.config.js",
+    "lint": "eslint src scripts plugins tests projects html-prototype-shell vite.config.js vitest.config.js playwright.config.js",
     "format": "prettier --no-error-on-unmatched-pattern --write src/config src/components/ui src/components/AppShell.vue src/components/ProjectPortal.vue src/composables src/router src/layouts src/services/project-assets.js src/services/project-sources.js src/services/page-prd-links.js src/views/auth src/views/docs src/views/mobile src/views/system src/views/tools src/views/HomeView.vue plugins scripts/generate-page.mjs scripts/validate-project-packages.mjs tests projects/*/page-definitions.js projects/*/page-prd-links.js templates/project-package vitest.config.js eslint.config.js vite.config.js",
     "format:check": "prettier --no-error-on-unmatched-pattern --check src/config src/components/ui src/components/AppShell.vue src/components/ProjectPortal.vue src/composables src/router src/layouts src/services/project-assets.js src/services/project-sources.js src/services/page-prd-links.js src/views/auth src/views/docs src/views/mobile src/views/system src/views/tools src/views/HomeView.vue plugins scripts/generate-page.mjs scripts/validate-project-packages.mjs tests projects/*/page-definitions.js projects/*/page-prd-links.js templates/project-package vitest.config.js eslint.config.js vite.config.js",
     "audit:all": "npm run audit:projects && npm run audit:views && npm run audit:styles && npm run audit:components && npm run audit:theme && npm run audit:naming && npm run audit:i18n && node scripts/audit-page-fidelity.cjs",
@@ -34,7 +34,6 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
-    "@fontsource-variable/noto-sans-sc": "^5.2.10",
     "dayjs": "^1.11.21",
     "dompurify": "^3.4.11",
     "echarts": "^6.1.0",

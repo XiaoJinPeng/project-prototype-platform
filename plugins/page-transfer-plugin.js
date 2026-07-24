@@ -9,9 +9,11 @@ import prettier from 'prettier';
 import { build as viteBuild } from 'vite';
 
 import { scanHtmlPrototypePages } from './html-prototype-plugin.js';
+import { extractEmbeddedScript, isSupportedPlatformExportFormat } from './platform-export-format.js';
 
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const PAGE_PATH_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const PLATFORM_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const allowedIcons = new Set([
   'Calendar',
   'CirclePlus',
@@ -65,12 +67,132 @@ function extractEditableBlock(source, startMarker, endMarker) {
 }
 
 function extractManifest(source) {
-  const match = source.match(/<script\s+id=["']prototype-page-manifest["'][^>]*>([\s\S]*?)<\/script>/i);
-  if (!match) throw new Error('缺少 prototype-page-manifest 页面描述。');
+  const content = extractEmbeddedScript(source, 'prototype-page-manifest');
+  if (content === null) throw new Error('缺少 prototype-page-manifest 页面描述。');
   try {
-    return JSON.parse(match[1].trim());
+    return JSON.parse(content.trim());
   } catch {
     throw new Error('prototype-page-manifest 不是有效的 JSON。');
+  }
+}
+
+function extractSfcBlock(source, tagName) {
+  const match = source.match(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i'));
+  return match ? match[1].trim() : '';
+}
+
+function extractSfcTag(source, tagName) {
+  const match = source.match(new RegExp(`<${tagName}\\b([^>]*)>([\\s\\S]*?)<\\/${tagName}>`, 'i'));
+  if (!match) return null;
+  return { attributes: match[1].trim(), content: match[2].trim() };
+}
+
+function readSfcAttribute(attributes, name) {
+  const match = String(attributes || '').match(
+    new RegExp(
+      `(?:^|\\s)${escapeRegExp(name)}(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+)))?(?=\\s|$)`,
+      'i',
+    ),
+  );
+  return match?.[1] ?? match?.[2] ?? match?.[3] ?? '';
+}
+
+function readEmbeddedScriptAttributes(source, scriptId) {
+  const match = String(source || '').match(
+    new RegExp(`<script\\b([^>]*\\bid=["']${escapeRegExp(scriptId)}["'][^>]*)>`, 'i'),
+  );
+  return match?.[1]?.trim() || '';
+}
+
+function canonicalSfcSource(source) {
+  const template = extractSfcTag(source, 'template');
+  if (!template) return '';
+  const script = extractSfcTag(source, 'script');
+  const style = extractSfcTag(source, 'style');
+  const blocks = [
+    `<template${template.attributes ? ` ${template.attributes}` : ''}>\n${template.content}\n</template>`,
+  ];
+  if (script) {
+    const setup = /\bsetup\b/i.test(script.attributes) ? ' setup' : '';
+    const lang = readSfcAttribute(script.attributes, 'lang');
+    blocks.push(`<script${setup}${lang ? ` lang="${lang}"` : ''}>\n${script.content}\n</script>`);
+  }
+  if (style) {
+    const scoped = /\bscoped\b/i.test(style.attributes) ? ' scoped' : '';
+    const moduleName = readSfcAttribute(style.attributes, 'module');
+    const module = /\bmodule\b/i.test(style.attributes)
+      ? moduleName
+        ? ` module="${moduleName}"`
+        : ' module'
+      : '';
+    const lang = readSfcAttribute(style.attributes, 'lang');
+    blocks.push(`<style${scoped}${module}${lang ? ` lang="${lang}"` : ''}>\n${style.content}\n</style>`);
+  }
+  return `${blocks.join('\n\n')}\n`;
+}
+
+function stripEditableMarkers(source) {
+  return source
+    .replace(/<!--\s*\[AI-EDIT\][^>]*-->/gi, '')
+    .replace(/<!--\s*PAGE_CONTENT_END\s*-->/gi, '')
+    .replace(/\/\*\s*\[AI-EDIT\][^*]*\*\//gi, '')
+    .replace(/\/\*\s*PAGE_LOGIC_END\s*\*\//gi, '')
+    .replace(/\/\*\s*PAGE_STYLE_END\s*\*\//gi, '')
+    .trim();
+}
+
+function restoreScriptEndTags(source) {
+  return String(source || '').replace(/<\\\/script/gi, '</script');
+}
+
+function extractEditableSfcSource(source) {
+  const template = extractEmbeddedScript(source, 'prototype-editable-template');
+  if (template === null) return '';
+  const script = extractEmbeddedScript(source, 'prototype-editable-script');
+  const style = extractEmbeddedScript(source, 'prototype-editable-style');
+  const scriptAttributes = readEmbeddedScriptAttributes(source, 'prototype-editable-script');
+  const styleAttributes = readEmbeddedScriptAttributes(source, 'prototype-editable-style');
+  const setup = readSfcAttribute(scriptAttributes, 'data-sfc-setup') === 'true';
+  const scoped = readSfcAttribute(styleAttributes, 'data-sfc-scoped') === 'true';
+  const styleModule = readSfcAttribute(styleAttributes, 'data-sfc-module');
+  const scriptLang = readSfcAttribute(scriptAttributes, 'data-sfc-lang');
+  const styleLang = readSfcAttribute(styleAttributes, 'data-sfc-lang');
+  return canonicalSfcSource(
+    [
+      `<template>${restoreScriptEndTags(stripEditableMarkers(template))}</template>`,
+      script === null
+        ? ''
+        : `<script${setup ? ' setup' : ''}${scriptLang ? ` lang="${scriptLang}"` : ''}>${restoreScriptEndTags(stripEditableMarkers(script))}</script>`,
+      style === null
+        ? ''
+        : `<style${scoped ? ' scoped' : ''}${styleModule ? (styleModule === 'true' ? ' module' : ` module="${styleModule}"`) : ''}${styleLang ? ` lang="${styleLang}"` : ''}>${restoreScriptEndTags(stripEditableMarkers(style))}</style>`,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  );
+}
+
+function extractExportSource(source) {
+  return extractEditableSfcSource(source);
+}
+
+function validatePageManifest(manifest, errors) {
+  if (!manifest) return;
+  if (manifest.templateVersion !== 1) errors.push('当前只支持 templateVersion 为 1 的模板。');
+  if (!manifest.pageKey || !/^[a-z][a-z0-9-]*$/.test(manifest.pageKey)) {
+    errors.push('pageKey 必须使用小写 kebab-case。');
+  }
+  if (!PROJECT_ID_PATTERN.test(manifest.client || '')) {
+    errors.push('client 必须使用小写 kebab-case。');
+  }
+  if (!manifest.pageTitle || !String(manifest.pageTitle).trim()) {
+    errors.push('manifest 缺少 pageTitle。');
+  }
+  if (!manifest.routePath || !/^\/[a-z][a-z0-9-]*\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(manifest.routePath)) {
+    errors.push('routePath 必须使用 /{client}/xxx 格式。');
+  }
+  if (manifest.menuIcon && !allowedIcons.has(manifest.menuIcon)) {
+    errors.push(`不支持的菜单图标：${manifest.menuIcon}。`);
   }
 }
 
@@ -111,6 +233,8 @@ export function inspectHtml(source) {
   const errors = [];
   const warnings = [];
   let manifest = null;
+  const exportSource = extractExportSource(source);
+  const isRoundTripExport = Boolean(exportSource);
 
   try {
     manifest = extractManifest(source);
@@ -118,63 +242,59 @@ export function inspectHtml(source) {
     errors.push(error.message);
   }
 
-  const requiredMarkers = [
-    ['页面内容区', '[AI-EDIT] PAGE_CONTENT_START', '<!-- PAGE_CONTENT_END -->'],
-    ['覆盖层', '[AI-EDIT] PAGE_OVERLAYS_START', '<!-- PAGE_OVERLAYS_END -->'],
-    ['页面逻辑', '[AI-EDIT] PAGE_LOGIC_START', '/* PAGE_LOGIC_END */'],
-  ];
+  if (isRoundTripExport) {
+    if (!isSupportedPlatformExportFormat(manifest?.exportFormat)) {
+      errors.push('可回导 HTML 缺少有效的导出格式标识。');
+    }
+    if (!extractSfcBlock(exportSource, 'template')) {
+      errors.push('可回导源文件缺少有效的 Vue template 区块。');
+    }
+  } else {
+    const requiredMarkers = [
+      ['页面内容区', '[AI-EDIT] PAGE_CONTENT_START', '<!-- PAGE_CONTENT_END -->'],
+      ['覆盖层', '[AI-EDIT] PAGE_OVERLAYS_START', '<!-- PAGE_OVERLAYS_END -->'],
+      ['页面逻辑', '[AI-EDIT] PAGE_LOGIC_START', '/* PAGE_LOGIC_END */'],
+    ];
 
-  for (const [label, startMarker, endMarker] of requiredMarkers) {
-    if (!extractBetween(source, startMarker, endMarker).trim()) {
-      errors.push(`缺少${label}标记或内容。`);
+    for (const [label, startMarker, endMarker] of requiredMarkers) {
+      if (!extractBetween(source, startMarker, endMarker).trim()) {
+        errors.push(`缺少${label}标记或内容。`);
+      }
     }
   }
 
   const markupSource = source.replace(/<!--[\s\S]*?-->/g, '');
-  const contentCount = (markupSource.match(/<[^>]*\bdata-page-content\b[^>]*>/gi) || []).length;
-  if (contentCount !== 1) errors.push('data-page-content 必须且只能出现一次。');
-  if (!/<[^>]*\bdata-business-content\b[^>]*>/i.test(markupSource)) {
-    warnings.push('未发现 data-business-content，页面可能缺少业务内容区标记。');
-  }
-  if (/<script[^>]+src=["'](?!https?:)/i.test(source.replace(/<!--[\s\S]*?-->/g, ''))) {
-    warnings.push('页面包含本地 script src，导入时不会复制外部脚本文件。');
-  }
-  const content = extractEditableBlock(source, '[AI-EDIT] PAGE_CONTENT_START', '<!-- PAGE_CONTENT_END -->');
-  const overlays = extractEditableBlock(
-    source,
-    '[AI-EDIT] PAGE_OVERLAYS_START',
-    '<!-- PAGE_OVERLAYS_END -->',
-  );
-  const logic = extractEditableBlock(source, '/* [AI-EDIT] PAGE_LOGIC_START', '/* PAGE_LOGIC_END */');
+  const content = isRoundTripExport
+    ? extractSfcBlock(exportSource, 'template')
+    : extractEditableBlock(source, '[AI-EDIT] PAGE_CONTENT_START', '<!-- PAGE_CONTENT_END -->');
+  const overlays = isRoundTripExport
+    ? ''
+    : extractEditableBlock(source, '[AI-EDIT] PAGE_OVERLAYS_START', '<!-- PAGE_OVERLAYS_END -->');
+  const logic = isRoundTripExport
+    ? exportSource
+    : extractEditableBlock(source, '/* [AI-EDIT] PAGE_LOGIC_START', '/* PAGE_LOGIC_END */');
   const editableSource = `${content}\n${overlays}\n${logic}`;
-  if (/\bon(?:click|change|input|submit)\s*=/i.test(editableSource)) {
-    errors.push('禁止使用 onclick、onchange 等内联事件，请改用 Vue 事件绑定。');
-  }
-  if (/window\.location|document\.querySelector|jquery|\.html\s*['"`]/i.test(editableSource)) {
-    warnings.push('页面包含模板规范不建议使用的浏览器或 HTML 跳转逻辑，请导入前确认。');
-  }
-  if (/https?:\/\//i.test(editableSource.match(/<img\b[^>]*>/gi)?.join('') || '')) {
-    warnings.push('图片存在外部 URL，导出时可能无法离线显示。');
+  if (!isRoundTripExport) {
+    const contentCount = (markupSource.match(/<[^>]*\bdata-page-content\b[^>]*>/gi) || []).length;
+    if (contentCount !== 1) errors.push('data-page-content 必须且只能出现一次。');
+    if (!/<[^>]*\bdata-business-content\b[^>]*>/i.test(markupSource)) {
+      warnings.push('未发现 data-business-content，页面可能缺少业务内容区标记。');
+    }
+    if (/<script[^>]+src=["'](?!https?:)/i.test(source.replace(/<!--[\s\S]*?-->/g, ''))) {
+      warnings.push('页面包含本地 script src，导入时不会复制外部脚本文件。');
+    }
+    if (/\bon(?:click|change|input|submit)\s*=\s*/i.test(editableSource)) {
+      errors.push('禁止使用 onclick、onchange 等内联事件，请改用 Vue 事件绑定。');
+    }
+    if (/window\.location|document\.querySelector|jquery|\.html\s*['"`]/i.test(editableSource)) {
+      warnings.push('页面包含模板规范不建议使用的浏览器或 HTML 跳转逻辑，请导入前确认。');
+    }
+    if (/https?:\/\//i.test(editableSource.match(/<img\b[^>]*>/gi)?.join('') || '')) {
+      warnings.push('图片存在外部 URL，导出时可能无法离线显示。');
+    }
   }
 
-  if (manifest) {
-    if (manifest.templateVersion !== 1) errors.push('当前只支持 templateVersion 为 1 的模板。');
-    if (!manifest.pageKey || !/^[a-z][a-z0-9-]*$/.test(manifest.pageKey)) {
-      errors.push('pageKey 必须使用小写 kebab-case。');
-    }
-    if (!PROJECT_ID_PATTERN.test(manifest.client || '')) {
-      errors.push('client 必须使用小写 kebab-case。');
-    }
-    if (!manifest.pageTitle || !String(manifest.pageTitle).trim()) {
-      errors.push('manifest 缺少 pageTitle。');
-    }
-    if (!manifest.routePath || !/^\/[a-z][a-z0-9-]*\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(manifest.routePath)) {
-      errors.push('routePath 必须使用 /{client}/xxx 格式。');
-    }
-    if (manifest.menuIcon && !allowedIcons.has(manifest.menuIcon)) {
-      errors.push(`不支持的菜单图标：${manifest.menuIcon}。`);
-    }
-  }
+  validatePageManifest(manifest, errors);
 
   const dialogs = (overlays.match(/<el-dialog\b/gi) || []).length;
   const drawers = (overlays.match(/<el-drawer\b/gi) || []).length;
@@ -184,6 +304,8 @@ export function inspectHtml(source) {
     errors,
     warnings,
     manifest,
+    format: isRoundTripExport ? manifest.exportFormat : 'html-template',
+    roundTrip: isRoundTripExport,
     stats: {
       blocks: collectBlocks(content),
       dialogs,
@@ -274,8 +396,12 @@ function resolveProjectViewPath(projectRoot, projectPackage, view) {
   throw new Error(`项目页面文件不存在：${view}`);
 }
 
-function parseRoutePath(manifest, client, requestedRoute) {
-  const fallback = String(manifest.routePath || '').replace(new RegExp(`^/${client}/`), '');
+function parseRoutePath(manifest, requestedRoute) {
+  const fallback =
+    String(manifest.routePath || '')
+      .split('/')
+      .filter(Boolean)
+      .at(-1) || '';
   const routePath = String(requestedRoute || fallback)
     .replace(/^\//, '')
     .trim();
@@ -667,7 +793,7 @@ function buildPlaceholderVue({ title, routePath }) {
 </template>
 
 <style scoped>
-.project-placeholder-page { padding: 28px; color: var(--app-color-text-primary); }
+.project-placeholder-page { padding: 24px 28px 32px; color: var(--app-color-text-primary); }
 .project-placeholder-header h1 { margin: 0; font-size: 24px; }
 .project-placeholder-header p { margin: 8px 0 0; color: var(--app-color-text-muted); font-size: 13px; }
 .project-placeholder-panel { margin-top: 20px; padding: 48px 24px; border: 1px solid var(--app-color-border); border-radius: var(--app-radius-panel); background: var(--app-color-surface); }
@@ -709,10 +835,7 @@ export async function listProjectRoutes({ projectRoot, projectId }) {
         name: client.name,
         basePath: projectPackage.definitions[client.id].basePath || `/${client.id}`,
         sections: projectPackage.definitions[client.id].sections || [],
-        pages: [
-          ...(projectPackage.definitions[client.id].pages || []),
-          ...(htmlPages[client.id] || []),
-        ],
+        pages: [...(projectPackage.definitions[client.id].pages || []), ...(htmlPages[client.id] || [])],
       })),
     backups: await listPageBackups(projectPackage),
     sectionBackups: await listSectionBackups(projectPackage),
@@ -1043,7 +1166,7 @@ export async function importPage({ projectRoot, source, target }) {
         )
       : null;
   if (mode === 'replace' && !originalPage) throw new Error('请选择要替换的现有页面。');
-  const routePath = parseRoutePath(manifest, client, target.routePath || originalPage?.path);
+  const routePath = parseRoutePath(manifest, target.routePath || originalPage?.path);
   const section = target.menuSection || manifest.menuSection;
   const icon = target.menuIcon || manifest.menuIcon || originalPage?.icon || 'Document';
   const pageTitle = String(target.pageTitle || manifest.pageTitle).trim();
@@ -1086,22 +1209,27 @@ export async function importPage({ projectRoot, source, target }) {
     view: relativeView,
     section,
     icon,
-    source: 'html-template',
+    source: inspection.roundTrip && inspection.format === 'vue-sfc' ? 'html-export' : 'html-template',
     prototype: {
       ...(originalPage?.prototype || {}),
       ...(target.sourceFile ? { sourceFile: target.sourceFile } : {}),
       templateVersion: manifest.templateVersion,
+      ...(inspection.format === 'vue-sfc' ? { exportFormat: manifest.exportFormat } : {}),
       pageKey: manifest.pageKey,
       pageTitle: manifest.pageTitle,
       pageType: manifest.pageType || 'custom',
       pageHeaderMode: manifest.pageHeaderMode || 'standard',
+      ...(typeof manifest.menu === 'boolean' ? { menu: manifest.menu } : {}),
     },
   };
   const updatedDefinitions =
     mode === 'replace'
       ? replacePageDefinition(sourceDefinitions, client, originalPage.path, definition)
       : insertPageDefinition(sourceDefinitions, client, definition);
-  const vueSource = await prettier.format(buildVueSource(source, manifest), { parser: 'vue' });
+  const vueSource = await prettier.format(
+    inspection.roundTrip ? extractExportSource(source) : buildVueSource(source, manifest),
+    { parser: 'vue' },
+  );
   const originalViewPath = originalPage
     ? resolveProjectViewPath(projectRoot, projectPackage, originalPage.view)
     : null;
@@ -1153,7 +1281,7 @@ export async function importPage({ projectRoot, source, target }) {
     menuTitle,
     mode,
     backupId: backup?.id || null,
-    source: 'html-template',
+    source: inspection.roundTrip && inspection.format === 'vue-sfc' ? 'html-export' : 'html-template',
     requiresReload: true,
   };
 }
@@ -1192,6 +1320,195 @@ function relativeModuleImport(fromDirectory, targetPath) {
 
 function pageFileName(page) {
   return `${page.client}-${page.path}.html`;
+}
+
+function configuredPrototypeSources(packageRoot, manifest) {
+  const prototype = manifest.prototype || {};
+  const configuredClients = prototype.clients;
+  const entries = Array.isArray(configuredClients)
+    ? configuredClients.map((item) => [item?.clientId || item?.id, item])
+    : configuredClients && typeof configuredClients === 'object'
+      ? Object.entries(configuredClients)
+      : [];
+
+  if (entries.length) {
+    return entries
+      .map(([clientId, item]) => ({
+        clientId: String(item?.clientId || clientId || '').trim(),
+        root: item?.root ? path.resolve(packageRoot, item.root) : '',
+        enabled: item?.enabled !== false,
+      }))
+      .filter((item) => item.enabled && item.root);
+  }
+
+  const roots = [];
+  if (prototype.enabled && prototype.root) roots.push(path.resolve(packageRoot, prototype.root));
+  if (manifest.docs?.root) {
+    const docsRoot = path.resolve(packageRoot, manifest.docs.root);
+    roots.push(path.resolve(path.dirname(docsRoot), '原型'));
+  }
+  return [...new Set(roots)].map((root) => ({
+    clientId: String(prototype.client || '').trim(),
+    root,
+    enabled: true,
+  }));
+}
+
+function isPathInside(root, target) {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+async function walkHtmlFiles(root) {
+  const files = [];
+  async function visit(directory) {
+    const entries = await fsp.readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (['node_modules', 'dist', 'exports'].includes(entry.name)) continue;
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(absolutePath);
+      } else if (/\.html?$/i.test(entry.name)) {
+        files.push(absolutePath);
+      }
+    }
+  }
+  await visit(root);
+  return files;
+}
+
+function absolutePathKey(filePath) {
+  const resolved = path.resolve(filePath);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+async function createPrototypeSourceIndex(projectPackage, pages) {
+  const requestedClients = new Set(
+    pages.filter((page) => page.prototype?.sourceFile).map((page) => page.client),
+  );
+  if (!requestedClients.size) return [];
+
+  const sources = configuredPrototypeSources(projectPackage.packageRoot, projectPackage.manifest).filter(
+    (item) => !item.clientId || requestedClients.has(item.clientId),
+  );
+  const indexedSources = [];
+  for (const source of sources) {
+    const files = await walkHtmlFiles(source.root);
+    const filesByName = new Map();
+    for (const absolutePath of files) {
+      const key = path.basename(absolutePath).toLowerCase();
+      const candidates = filesByName.get(key) || [];
+      candidates.push(absolutePath);
+      filesByName.set(key, candidates);
+    }
+    indexedSources.push({ ...source, filesByName });
+  }
+  return indexedSources;
+}
+
+async function findPrototypeHtmlSource(projectPackage, page, sourceIndex) {
+  if (!page.prototype?.sourceFile) return null;
+  const sourceFile = String(page.prototype.sourceFile).trim();
+  if (!sourceFile) return null;
+  const expectedName = path.basename(sourceFile).toLowerCase();
+  const sources = sourceIndex.filter((item) => !item.clientId || item.clientId === page.client);
+
+  for (const source of sources) {
+    const directPath = path.resolve(source.root, sourceFile);
+    if (isPathInside(source.root, directPath) && fs.existsSync(directPath)) {
+      return { absolutePath: directPath, root: source.root, source: await fsp.readFile(directPath, 'utf8') };
+    }
+    const candidates = source.filesByName.get(expectedName) || [];
+    if (candidates.length === 1) {
+      return {
+        absolutePath: candidates[0],
+        root: source.root,
+        source: await fsp.readFile(candidates[0], 'utf8'),
+      };
+    }
+    if (candidates.length > 1) {
+      const client = projectPackage.manifest.clients?.find((item) => item.id === page.client);
+      const clientKeys = [client?.id, client?.name, client?.shortName].filter(Boolean).map((value) =>
+        String(value)
+          .replace(/[^\p{L}\p{N}]+/gu, '')
+          .toLowerCase(),
+      );
+      const matched = candidates.find((absolutePath) => {
+        const relative = path.relative(source.root, absolutePath);
+        const segments = relative
+          .split(path.sep)
+          .map((segment) => segment.replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase());
+        return segments.some((segment) => clientKeys.includes(segment));
+      });
+      if (matched) {
+        return { absolutePath: matched, root: source.root, source: await fsp.readFile(matched, 'utf8') };
+      }
+    }
+  }
+  return null;
+}
+
+function createPrototypeLinkIndex(selectedPages, sourceRecords) {
+  const byAbsolutePath = new Map();
+  const byClientFileName = new Map();
+  const byFileName = new Map();
+  for (const page of selectedPages) {
+    const record = sourceRecords.get(page.file);
+    if (!record) continue;
+    byAbsolutePath.set(absolutePathKey(record.absolutePath), page.file);
+    const fileName = path.basename(record.absolutePath).toLowerCase();
+    const clientKey = `${page.client}:${fileName}`;
+    byClientFileName.set(clientKey, [...(byClientFileName.get(clientKey) || []), page.file]);
+    byFileName.set(fileName, [...(byFileName.get(fileName) || []), page.file]);
+  }
+  return { byAbsolutePath, byClientFileName, byFileName };
+}
+
+function rewritePrototypeLinks(source, page, selectedPages, sourceRecords) {
+  const currentRecord = sourceRecords.get(page.file);
+  if (!currentRecord) return String(source || '');
+  const linkIndex = createPrototypeLinkIndex(selectedPages, sourceRecords);
+
+  const rewrite = (value) => {
+    const match = String(value || '').match(/^([^?#]*)([?#].*)?$/);
+    const pathname = match?.[1] || '';
+    const suffix = match?.[2] || '';
+    if (!/\.html?$/i.test(pathname) || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(pathname)) {
+      return value;
+    }
+    let decodedPath = pathname;
+    try {
+      decodedPath = decodeURIComponent(pathname);
+    } catch {
+      // Keep malformed URL text unchanged and continue with its literal path.
+    }
+    const resolvedTarget = decodedPath.startsWith('/')
+      ? path.resolve(currentRecord.root, decodedPath.replace(/^\/+/, ''))
+      : path.resolve(path.dirname(currentRecord.absolutePath), decodedPath);
+    const exactTarget = linkIndex.byAbsolutePath.get(absolutePathKey(resolvedTarget));
+    const fileName = path.basename(decodedPath).toLowerCase();
+    const clientCandidates = linkIndex.byClientFileName.get(`${page.client}:${fileName}`) || [];
+    const globalCandidates = linkIndex.byFileName.get(fileName) || [];
+    const target =
+      exactTarget ||
+      (clientCandidates.length === 1 ? clientCandidates[0] : '') ||
+      (globalCandidates.length === 1 ? globalCandidates[0] : '');
+    return target ? `./${target}${suffix}` : value;
+  };
+
+  return String(source || '')
+    .replace(
+      /(\b(?:href|formaction)=["'])([^"']+)(["'])/gi,
+      (_match, prefix, value, suffix) => `${prefix}${rewrite(value)}${suffix}`,
+    )
+    .replace(
+      /(window\.location(?:\.href)?\s*=\s*["'])([^"']+)(["'])/gi,
+      (_match, prefix, value, suffix) => `${prefix}${rewrite(value)}${suffix}`,
+    )
+    .replace(
+      /(window\.location\.(?:assign|replace)\(\s*["'])([^"']+)(["']\s*\))/gi,
+      (_match, prefix, value, suffix) => `${prefix}${rewrite(value)}${suffix}`,
+    );
 }
 
 function createMenuSource(clientDefinition, selectedPages) {
@@ -1264,7 +1581,7 @@ async function writeExportWorkspace({
   const i18nImport = relativeModuleImport(workDir, path.join(exportI18nDir, 'index.js'));
   const localizerImport = relativeModuleImport(workDir, path.join(exportI18nDir, 'legacy-localizer.js'));
   const appShellSource = await fsp.readFile(
-    path.join(projectRoot, 'src', 'components', 'AppShell.vue'),
+    path.join(PLATFORM_ROOT, 'src', 'components', 'AppShell.vue'),
     'utf8',
   );
   await fsp.writeFile(
@@ -1334,18 +1651,18 @@ export default router;
   );
   const exportSourceRoot = path.join(workDir, 'export-src');
   await fsp.cp(
-    path.join(projectRoot, 'src', 'components', 'ui'),
+    path.join(PLATFORM_ROOT, 'src', 'components', 'ui'),
     path.join(exportSourceRoot, 'components', 'ui'),
     { recursive: true },
   );
   await fsp.mkdir(path.join(exportSourceRoot, 'config'), { recursive: true });
   await fsp.copyFile(
-    path.join(projectRoot, 'src', 'config', 'theme.js'),
+    path.join(PLATFORM_ROOT, 'src', 'config', 'theme.js'),
     path.join(exportSourceRoot, 'config', 'theme.js'),
   );
   await fsp.mkdir(path.join(exportSourceRoot, 'composables'), { recursive: true });
   await fsp.copyFile(
-    path.join(projectRoot, 'src', 'composables', 'useChartRegistry.js'),
+    path.join(PLATFORM_ROOT, 'src', 'composables', 'useChartRegistry.js'),
     path.join(exportSourceRoot, 'composables', 'useChartRegistry.js'),
   );
   await fsp.mkdir(path.join(exportSourceRoot, 'router'), { recursive: true });
@@ -1363,8 +1680,11 @@ export default router;
     .replace("'../services/platform-settings'", JSON.stringify(exportPlatformSettingsImport));
   await fsp.writeFile(path.join(workDir, 'ExportAppShell.vue'), exportAppShellSource, 'utf8');
   const appShellImport = './ExportAppShell.vue';
-  const tokensImport = relativeModuleImport(workDir, path.join(projectRoot, 'src', 'styles', 'tokens.css'));
-  const baseStyleImport = relativeModuleImport(workDir, path.join(projectRoot, 'src', 'styles', 'base.css'));
+  const tokensImport = relativeModuleImport(workDir, path.join(PLATFORM_ROOT, 'src', 'styles', 'tokens.css'));
+  const baseStyleImport = relativeModuleImport(
+    workDir,
+    path.join(PLATFORM_ROOT, 'src', 'styles', 'base.css'),
+  );
 
   const layoutImports = [];
   const routeGroups = [];
@@ -1418,7 +1738,7 @@ export default router;
   const mainSource = `import { createApp } from 'vue';\nimport ElementPlus from 'element-plus';\nimport * as ElementPlusIconsVue from '@element-plus/icons-vue';\nimport App from './App.vue';\nimport router from './router.js';\nimport { i18n } from ${JSON.stringify(i18nImport)};\nimport { installLegacyLocalizer } from ${JSON.stringify(localizerImport)};\nimport ${JSON.stringify(tokensImport)};\nimport ${JSON.stringify(baseStyleImport)};\nconst theme = ${JSON.stringify(projectPackage.manifest.theme || {})};\nif (theme.primary) {\n  document.documentElement.style.setProperty('--app-color-primary', theme.primary);\n  const match = theme.primary.match(/^#([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i);\n  if (match) document.documentElement.style.setProperty('--app-color-primary-rgb', match.slice(1).map((value) => Number.parseInt(value, 16)).join(' '));\n}\nif (theme.primaryHover) document.documentElement.style.setProperty('--app-color-primary-hover', theme.primaryHover);\nif (theme.primaryActive) document.documentElement.style.setProperty('--app-color-primary-active', theme.primaryActive);\nif (theme.pageBackground) document.documentElement.style.setProperty('--app-color-page', theme.pageBackground);\nconst app = createApp(App);\nfor (const [key, component] of Object.entries(ElementPlusIconsVue)) app.component(key, component);\napp.use(ElementPlus);\napp.use(i18n);\napp.use(router);\napp.mount('#app');\ninstallLegacyLocalizer();\n`;
   await fsp.writeFile(path.join(workDir, 'main.js'), mainSource, 'utf8');
 
-  const htmlSource = `<!doctype html>\n<html lang="zh-CN">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.2/dist/index.css" />\n  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" />\n  <script src="https://cdn.tailwindcss.com"></script>\n  <script src="https://unpkg.com/vue@3.5.39/dist/vue.global.prod.js"></script>\n  <script src="https://unpkg.com/vue-router@4.6.4/dist/vue-router.global.prod.js"></script>\n  <script src="https://unpkg.com/vue-i18n@11.4.6/dist/vue-i18n.global.prod.js"></script>\n  <script src="https://unpkg.com/element-plus@2.14.2/dist/index.full.min.js"></script>\n  <script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>\n  <script>window.__PROJECT_EXPORT__=__EXPORT_MANIFEST__;if(!window.location.hash){window.location.hash='#__CURRENT_PATH__';}</script>\n  <title>页面演示</title>\n</head>\n<body>\n  <div id="app"></div>\n  <script type="module" src="./main.js"></script>\n</body>\n</html>\n`;
+  const htmlSource = `<!doctype html>\n<html lang="zh-CN">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <link rel="stylesheet" href="https://unpkg.com/element-plus@2.14.2/dist/index.css" />\n  <script src="https://cdn.tailwindcss.com"></script>\n  <script src="https://unpkg.com/vue@3.5.39/dist/vue.global.prod.js"></script>\n  <script src="https://unpkg.com/vue-router@4.6.4/dist/vue-router.global.prod.js"></script>\n  <script src="https://unpkg.com/vue-i18n@11.4.6/dist/vue-i18n.global.prod.js"></script>\n  <script src="https://unpkg.com/element-plus@2.14.2/dist/index.full.min.js"></script>\n  <script src="https://unpkg.com/@element-plus/icons-vue@2.3.2/dist/index.iife.min.js"></script>\n  <script>window.__PROJECT_EXPORT__=__EXPORT_MANIFEST__;if(!window.location.hash){window.location.hash='#__CURRENT_PATH__';}</script>\n  <title>页面演示</title>\n</head>\n<body>\n  <div id="app"></div>\n  <script type="module" src="./main.js"></script>\n</body>\n</html>\n`;
   await fsp.writeFile(path.join(workDir, 'index.html'), htmlSource, 'utf8');
   await fsp.writeFile(
     path.join(workDir, 'export-source.json'),
@@ -1529,6 +1849,137 @@ function materializeExportHtml(baseHtml, manifest, currentPath) {
     .replaceAll('__CURRENT_PATH__', currentPath);
 }
 
+function exportPageKey(page) {
+  const raw = String(page.prototype?.pageKey || page.path || 'exported-page')
+    .trim()
+    .toLowerCase();
+  return (
+    raw
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-') || 'exported-page'
+  );
+}
+
+function createRoundTripManifest(page, exportFormat = 'vue-sfc') {
+  return {
+    templateVersion: 1,
+    exportFormat,
+    pageKey: exportPageKey(page),
+    pageTitle: page.title,
+    pageType: page.prototype?.pageType || 'custom',
+    pageHeaderMode: page.prototype?.pageHeaderMode || 'standard',
+    client: page.client,
+    routePath: `/${page.client}/${page.path}`,
+    menuSection: page.section || null,
+    menuTitle: page.title,
+    menuIcon: page.icon || 'Document',
+    menu: page.menu !== false,
+  };
+}
+
+const MANAGED_EXPORT_SCRIPT_IDS = [
+  'prototype-page-manifest',
+  'prototype-export-config',
+  'prototype-editable-template',
+  'prototype-editable-script',
+  'prototype-editable-style',
+];
+
+function escapeHtmlAttribute(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function removeElementById(source, tagName, elementId) {
+  const pattern = new RegExp(
+    `<${tagName}\\b(?=[^>]*\\bid=["']${escapeRegExp(elementId)}["'])[^>]*>[\\s\\S]*?<\\/${tagName}>\\s*`,
+    'gi',
+  );
+  return String(source || '').replace(pattern, '');
+}
+
+function removeManagedExportArtifacts(source) {
+  let cleaned = String(source || '');
+  for (const scriptId of MANAGED_EXPORT_SCRIPT_IDS) {
+    cleaned = removeElementById(cleaned, 'script', scriptId);
+  }
+  return removeElementById(cleaned, 'style', 'platform-html-content-only');
+}
+
+function insertBeforeClosingTag(source, tagName, content) {
+  const closingPattern = new RegExp(`<\\/${tagName}>`, 'i');
+  if (closingPattern.test(source)) return source.replace(closingPattern, `${content}</${tagName}>`);
+  return `${source}${content}`;
+}
+
+function buildEditableSourceBlocks(source) {
+  const template = extractSfcTag(source, 'template');
+  if (!template) return '';
+  const script = extractSfcTag(source, 'script');
+  const style = extractSfcTag(source, 'style');
+  const safe = (value) => String(value || '').replace(/<\/script/gi, '<\\/script');
+  const scriptAttributes = script?.attributes || '';
+  const styleAttributes = style?.attributes || '';
+  const scriptLang = readSfcAttribute(scriptAttributes, 'lang');
+  const styleLang = readSfcAttribute(styleAttributes, 'lang');
+  const styleModule = /\bmodule\b/i.test(styleAttributes)
+    ? readSfcAttribute(styleAttributes, 'module') || 'true'
+    : '';
+  const templateBlock = `<script id="prototype-editable-template" type="text/plain" data-source-format="vue-sfc-template">
+<!-- [AI-EDIT] PAGE_CONTENT_START: 编辑 Vue template 内容；不要修改外围标记。 -->
+${safe(template.content)}
+<!-- PAGE_CONTENT_END -->
+</script>`;
+  const scriptBlock = script
+    ? `<script id="prototype-editable-script" type="text/plain" data-source-format="vue-sfc-script" data-sfc-setup="${/\bsetup\b/i.test(scriptAttributes)}"${scriptLang ? ` data-sfc-lang="${scriptLang}"` : ''}>
+/* [AI-EDIT] PAGE_LOGIC_START: 编辑 Vue script / script setup 内容。 */
+${safe(script.content)}
+/* PAGE_LOGIC_END */
+</script>`
+    : '';
+  const styleBlock = style
+    ? `<script id="prototype-editable-style" type="text/plain" data-source-format="vue-sfc-style" data-sfc-scoped="${/\bscoped\b/i.test(styleAttributes)}"${styleModule ? ` data-sfc-module="${escapeHtmlAttribute(styleModule)}"` : ''}${styleLang ? ` data-sfc-lang="${styleLang}"` : ''}>
+/* [AI-EDIT] PAGE_STYLE_START: 编辑页面专属 CSS；选择器应保持页面根类隔离。 */
+${safe(style.content)}
+/* PAGE_STYLE_END */
+</script>`
+    : '';
+  return `<!--
+  PORTABLE HTML PROTOTYPE SOURCE
+  编辑 prototype-editable-* 区块后重新导入；prototype-runtime 是生成的运行快照，不要直接修改。
+-->
+${[templateBlock, scriptBlock, styleBlock].filter(Boolean).join('\n\n')}`;
+}
+
+function materializeRoundTripSource(baseHtml, source, manifest) {
+  const serializedManifest = JSON.stringify(manifest).replaceAll('<', '\\u003c');
+  const manifestScript = `<script id="prototype-page-manifest" type="application/json">${serializedManifest}</script>`;
+  const editableSource = buildEditableSourceBlocks(source);
+  const cleanedHtml = removeManagedExportArtifacts(baseHtml);
+  const withManifest = insertBeforeClosingTag(cleanedHtml, 'head', manifestScript);
+  return insertBeforeClosingTag(withManifest, 'body', editableSource);
+}
+
+function materializeLightweightHtml({
+  source,
+  page,
+  roundTripSource,
+  roundTripManifest,
+  exportManifest,
+  selectedPages,
+  sourceRecords,
+}) {
+  const rewrittenSource = rewritePrototypeLinks(source, page, selectedPages, sourceRecords);
+  const htmlWithSource = materializeRoundTripSource(rewrittenSource, roundTripSource, roundTripManifest);
+  const serializedExportManifest = JSON.stringify(exportManifest).replaceAll('<', '\\u003c');
+  const exportConfigScript = `<script id="prototype-export-config">window.__PROJECT_EXPORT__=${serializedExportManifest};</script>`;
+  return insertBeforeClosingTag(htmlWithSource, 'head', exportConfigScript);
+}
+
 async function buildExportPage({
   workDir,
   projectRoot,
@@ -1572,7 +2023,7 @@ async function buildExportPage({
         { find: '@', replacement: exportSourceRoot },
       ],
     },
-    css: { postcss: projectRoot },
+    css: { postcss: PLATFORM_ROOT },
     build: {
       outDir: distDir,
       emptyOutDir: true,
@@ -1618,7 +2069,7 @@ async function buildExportPage({
   return inlineViteOutput(distDir);
 }
 
-async function createExportPackage({ projectRoot, projectId, selectedPaths, packageName }) {
+export async function createExportPackage({ projectRoot, projectId, selectedPaths, packageName }) {
   const projectPackage = await loadProjectPackage(projectRoot, projectId);
   const definitions = projectPackage.definitions;
   const allPages = Object.keys(definitions).flatMap((client) =>
@@ -1647,6 +2098,19 @@ async function createExportPackage({ projectRoot, projectId, selectedPaths, pack
     ...page,
     file: selected.length === 1 ? singleFileName : pageFileName(page),
   }));
+  const roundTripSources = new Map();
+  const sourceRecords = new Map();
+  const prototypeSourceIndex = await createPrototypeSourceIndex(projectPackage, selectedWithFiles);
+  for (const page of selectedWithFiles) {
+    if (!page.view) {
+      throw new Error(`页面“${page.title}”没有 Vue 页面源文件，暂时无法生成可回导 HTML。`);
+    }
+    const viewPath = resolveProjectViewPath(projectRoot, projectPackage, page.view);
+    const source = await fsp.readFile(viewPath, 'utf8');
+    roundTripSources.set(page.file, await prettier.format(source, { parser: 'vue' }));
+    const prototypeSource = await findPrototypeHtmlSource(projectPackage, page, prototypeSourceIndex);
+    if (prototypeSource) sourceRecords.set(page.file, prototypeSource);
+  }
   const clients = [...new Set(selectedWithFiles.map((page) => page.client))];
   const exportManifest = {
     schemaVersion: 1,
@@ -1677,6 +2141,17 @@ async function createExportPackage({ projectRoot, projectId, selectedPaths, pack
   try {
     const pageBundles = [];
     for (const page of selectedWithFiles) {
+      const roundTripSource = roundTripSources.get(page.file);
+      const prototypeSource = sourceRecords.get(page.file);
+      if (prototypeSource) {
+        pageBundles.push({
+          page,
+          lightweightSource: prototypeSource.source,
+          roundTripSource,
+          roundTripManifest: createRoundTripManifest(page, 'html-template'),
+        });
+        continue;
+      }
       const pageWorkDir = path.join(workDir, page.file.replace(/\.html$/i, ''));
       const baseHtml = await buildExportPage({
         workDir: pageWorkDir,
@@ -1688,13 +2163,33 @@ async function createExportPackage({ projectRoot, projectId, selectedPaths, pack
         currentPage: page,
         exportManifest,
       });
-      pageBundles.push({ page, baseHtml });
+      pageBundles.push({
+        page,
+        baseHtml,
+        roundTripSource,
+        roundTripManifest: createRoundTripManifest(page, 'vue-sfc'),
+      });
     }
 
     if (selectedWithFiles.length === 1) {
-      const { page, baseHtml } = pageBundles[0];
+      const { page, baseHtml, lightweightSource, roundTripManifest, roundTripSource } = pageBundles[0];
       const htmlPath = path.join(exportsRoot, page.file);
-      await fsp.writeFile(htmlPath, materializeExportHtml(baseHtml, exportManifest, page.fullPath), 'utf8');
+      const materializedHtml = lightweightSource
+        ? materializeLightweightHtml({
+            source: lightweightSource,
+            page,
+            roundTripSource,
+            roundTripManifest,
+            exportManifest,
+            selectedPages: selectedWithFiles,
+            sourceRecords,
+          })
+        : materializeRoundTripSource(
+            materializeExportHtml(baseHtml, exportManifest, page.fullPath),
+            roundTripSource,
+            roundTripManifest,
+          );
+      await fsp.writeFile(htmlPath, materializedHtml, 'utf8');
       const relativeHtml = toPosixPath(path.relative(projectRoot, htmlPath));
       return {
         id: exportId,
@@ -1709,12 +2204,23 @@ async function createExportPackage({ projectRoot, projectId, selectedPaths, pack
 
     const exportDir = path.join(exportsRoot, `${safeName}-${exportId}`);
     await fsp.mkdir(exportDir, { recursive: true });
-    for (const { page, baseHtml } of pageBundles) {
-      await fsp.writeFile(
-        path.join(exportDir, page.file),
-        materializeExportHtml(baseHtml, exportManifest, page.fullPath),
-        'utf8',
-      );
+    for (const { page, baseHtml, lightweightSource, roundTripManifest, roundTripSource } of pageBundles) {
+      const materializedHtml = lightweightSource
+        ? materializeLightweightHtml({
+            source: lightweightSource,
+            page,
+            roundTripSource,
+            roundTripManifest,
+            exportManifest,
+            selectedPages: selectedWithFiles,
+            sourceRecords,
+          })
+        : materializeRoundTripSource(
+            materializeExportHtml(baseHtml, exportManifest, page.fullPath),
+            roundTripSource,
+            roundTripManifest,
+          );
+      await fsp.writeFile(path.join(exportDir, page.file), materializedHtml, 'utf8');
     }
 
     const zipPath = `${exportDir}.zip`;

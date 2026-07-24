@@ -1,5 +1,4 @@
 import { createApp } from 'vue';
-import '@fontsource-variable/noto-sans-sc';
 import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
 import './styles/tokens.css';

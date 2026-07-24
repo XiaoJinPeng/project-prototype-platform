@@ -27,7 +27,7 @@
     <div class="transfer-notices">
       <el-alert
         class="boundary-alert"
-        title="导入面向规范 HTML 模板；导出面向客户演示，不将导出的运行包作为 Vue 源码重新导回。"
+        title="导入支持规范 HTML 和本平台导出的可回导 HTML；导出演示区与可编辑源文件区分开。"
         type="info"
         :closable="false"
       />
@@ -264,11 +264,12 @@
           <div class="panel-heading">
             <div>
               <h2>导出独立演示包</h2>
-              <p>选择页面后生成独立运行包，菜单只保留本次选中的页面。</p>
+              <p>选择页面后生成独立运行包，并保留可回导的 Vue 页面源文件区。</p>
             </div>
             <div class="panel-heading-tags">
               <el-tag type="success">无需客户安装 Node</el-tag>
               <el-tag type="warning">打开时需要网络</el-tag>
+              <el-tag type="info">支持回导</el-tag>
             </div>
           </div>
 
@@ -454,7 +455,7 @@ const exportGroups = computed(() => {
       return {
         client: client.id,
         clientName: client.name,
-          pages: definition.pages
+        pages: definition.pages
           .filter((page) => page.menu !== false && page.sourceType !== 'html-direct')
           .map((page) => ({
             ...page,
@@ -487,8 +488,8 @@ const exportResultTitle = computed(() =>
 );
 const exportResultSubtitle = computed(() =>
   exportResult.value?.result?.mode === 'single'
-    ? '已生成一个可直接打开的 HTML 文件，公共依赖通过 CDN 加载。'
-    : '已生成仅包含所选页面的 ZIP，每个 HTML 均可打开并通过菜单互相跳转。公共依赖通过 CDN 加载。',
+    ? '已生成一个可直接打开且可重新上传导入的 HTML 文件，公共依赖通过 CDN 加载。'
+    : '已生成仅包含所选页面的 ZIP，每个 HTML 均可打开、互相跳转并保留回导源文件。公共依赖通过 CDN 加载。',
 );
 
 watch(

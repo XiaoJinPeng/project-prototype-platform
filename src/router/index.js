@@ -126,7 +126,7 @@ const routes = [
     path: '/tools/project-routes',
     name: 'project-routes',
     component: () => import('../views/tools/ProjectRoutesView.vue'),
-    meta: { title: '路由菜单管理', theme: 'platform' },
+    meta: { title: '路由菜单管理', transition: 'platform', theme: 'platform' },
   },
   ...createInstalledProjectRoutes(),
   ...createLegacyProjectRedirects(),

@@ -2,6 +2,12 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import {
+  isPlatformExportHtml,
+  isSupportedPlatformExportFormat,
+  readPlatformExportManifest,
+} from './platform-export-format.js';
+
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const HTML_EXTENSIONS = new Set(['.html', '.htm']);
 const PUBLIC_EXTENSIONS = new Set([
@@ -32,6 +38,14 @@ const RESOLVED_VIRTUAL_MODULE_ID = `\0${VIRTUAL_MODULE_ID}`;
 
 function toWebPath(filePath) {
   return filePath.split(path.sep).join('/');
+}
+
+function decodePathSegment(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return '';
+  }
 }
 
 function isInsideRoot(root, target) {
@@ -108,6 +122,16 @@ function createRoutePath(relativePath, explicitPath = '') {
   return routePath || `page-${shortHash(relativePath)}`;
 }
 
+function routePathFromPlatformExportManifest(manifest) {
+  if (!isSupportedPlatformExportFormat(manifest?.exportFormat)) return '';
+  const routePath =
+    String(manifest?.routePath || '')
+      .split('/')
+      .filter(Boolean)
+      .at(-1) || '';
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(routePath) ? routePath : '';
+}
+
 async function walkFiles(root) {
   const files = [];
   async function walk(directory) {
@@ -115,7 +139,9 @@ async function walkFiles(root) {
       if (error.code === 'ENOENT') return [];
       throw error;
     });
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, 'zh-Hans-CN', { numeric: true }))) {
+    for (const entry of entries.sort((left, right) =>
+      left.name.localeCompare(right.name, 'zh-Hans-CN', { numeric: true }),
+    )) {
       if (['node_modules', 'dist', 'exports'].includes(entry.name)) continue;
       const absolutePath = path.join(directory, entry.name);
       if (entry.isDirectory()) await walk(absolutePath);
@@ -143,9 +169,11 @@ function normalizeClientKey(value) {
     .toLowerCase();
 }
 
-function resolveClientId({ prototype, sourceClientId = '', relativePath, clients }) {
-  const configuredClient = String(sourceClientId || prototype.client || '').trim();
-  if (configuredClient && clients.some((client) => client.id === configuredClient)) return configuredClient;
+function resolveClientId({ prototype, sourceClientId = '', manifestClientId = '', relativePath, clients }) {
+  for (const candidate of [sourceClientId, manifestClientId, prototype.client]) {
+    const clientId = String(candidate || '').trim();
+    if (clientId && clients.some((client) => client.id === clientId)) return clientId;
+  }
 
   const firstSegment = relativePath.split('/')[0] || '';
   const normalizedSegment = normalizeClientKey(firstSegment);
@@ -195,8 +223,11 @@ function resolveSourceRelativePath(relativePath, clientId, clients) {
   const segments = relativePath.split('/').filter(Boolean);
   const firstSegment = segments[0] || '';
   const client = clients.find((item) => {
-    return item.id === clientId && [item.id, item.name, item.shortName].some(
-      (candidate) => normalizeClientKey(candidate) === normalizeClientKey(firstSegment),
+    return (
+      item.id === clientId &&
+      [item.id, item.name, item.shortName].some(
+        (candidate) => normalizeClientKey(candidate) === normalizeClientKey(firstSegment),
+      )
     );
   });
   return client ? segments.slice(1).join('/') || segments.join('/') : relativePath;
@@ -237,7 +268,10 @@ export async function scanHtmlPrototypePages(projectsRoot) {
     const definitions = await readProjectDefinition(item.projectRoot, item.manifest).catch(() => ({}));
     const clients = item.manifest.clients || [];
     const pagesByClient = {};
-    roots[item.projectId] = item.sources.map((source) => ({ clientId: source.clientId, root: source.prototypeRoot }));
+    roots[item.projectId] = item.sources.map((source) => ({
+      clientId: source.clientId,
+      root: source.prototypeRoot,
+    }));
 
     for (const prototypeSource of item.sources) {
       const htmlFiles = await walkFiles(prototypeSource.prototypeRoot);
@@ -245,9 +279,12 @@ export async function scanHtmlPrototypePages(projectsRoot) {
         if (!HTML_EXTENSIONS.has(path.extname(absolutePath).toLowerCase())) continue;
         const relativePath = toWebPath(path.relative(prototypeSource.prototypeRoot, absolutePath));
         const source = await fs.readFile(absolutePath, 'utf8');
+        const exportManifest = readPlatformExportManifest(source);
+        const isExportHtml = isPlatformExportHtml(source);
         const clientId = resolveClientId({
           prototype: item.manifest.prototype,
           sourceClientId: prototypeSource.clientId,
+          manifestClientId: exportManifest?.client,
           relativePath,
           clients,
         });
@@ -256,25 +293,48 @@ export async function scanHtmlPrototypePages(projectsRoot) {
         const sourcePath = prototypeSource.clientId
           ? relativePath
           : resolveSourceRelativePath(relativePath, clientId, clients);
-        const explicitPath = readMetaValue(source, 'prototype-path');
+        const explicitPath = isExportHtml
+          ? routePathFromPlatformExportManifest(exportManifest)
+          : readMetaValue(source, 'prototype-path');
         const pagePath = createRoutePath(sourcePath, explicitPath);
-        const pageName = `html-${shortHash(`${clientId}/${prototypeSource.root}/${relativePath}`)}`;
+        const sourceIdentity = `${clientId}/${prototypeSource.root}/${relativePath}`;
+        const manifestPageKey =
+          isExportHtml && exportManifest?.pageKey ? normalizeSlug(exportManifest.pageKey) : '';
+        const pageName = manifestPageKey
+          ? `html-${manifestPageKey}-${shortHash(sourceIdentity)}`
+          : `html-${shortHash(sourceIdentity)}`;
+        const sectionCandidates = [
+          readMetaValue(source, 'prototype-section'),
+          isExportHtml ? String(exportManifest?.menuSection || '').trim() : '',
+          prototypeSource.section,
+          String(item.manifest.prototype.section || '').trim(),
+        ];
         const section =
-          readMetaValue(source, 'prototype-section') ||
-          prototypeSource.section ||
-          String(item.manifest.prototype.section || '').trim() ||
+          sectionCandidates.find((candidate) =>
+            clientDefinition.sections?.some((item) => item.id === candidate),
+          ) ||
           clientDefinition.sections?.[0]?.id ||
           'workspace';
         const page = {
           path: pagePath,
           name: pageName,
-          title: readHtmlTitle(source, absolutePath),
+          title: isExportHtml
+            ? exportManifest?.pageTitle || exportManifest?.menuTitle || readHtmlTitle(source, absolutePath)
+            : readHtmlTitle(source, absolutePath),
           sourceType: 'html-direct',
           source: relativePath,
           sourceRoot: prototypeSource.clientId || '_',
+          renderMode: isExportHtml ? 'content-only' : 'full',
           section,
-          icon: readMetaValue(source, 'prototype-icon') || prototypeSource.icon || 'Document',
-          menu: readMetaValue(source, 'prototype-menu') !== 'false',
+          icon:
+            readMetaValue(source, 'prototype-icon') ||
+            (isExportHtml ? exportManifest?.menuIcon : '') ||
+            prototypeSource.icon ||
+            'Document',
+          menu:
+            isExportHtml && typeof exportManifest?.menu === 'boolean'
+              ? exportManifest.menu
+              : readMetaValue(source, 'prototype-menu') !== 'false',
         };
         pagesByClient[clientId] ||= [];
         pagesByClient[clientId].push(page);
@@ -287,7 +347,9 @@ export async function scanHtmlPrototypePages(projectsRoot) {
 }
 
 function resolvePublicFile(root, relativePath) {
-  const normalizedPath = String(relativePath || '').replaceAll('\\', '/').replace(/^\/+/, '');
+  const normalizedPath = String(relativePath || '')
+    .replaceAll('\\', '/')
+    .replace(/^\/+/, '');
   const target = path.resolve(root, ...normalizedPath.split('/'));
   if (!isInsideRoot(root, target) || !PUBLIC_EXTENSIONS.has(path.extname(target).toLowerCase())) return null;
   return target;
@@ -318,6 +380,71 @@ function mimeTypeFor(filePath) {
       '.woff2': 'font/woff2',
     }[path.extname(filePath).toLowerCase()] || 'application/octet-stream'
   );
+}
+
+const CONTENT_ONLY_STYLE = `
+<style id="platform-html-content-only">
+  html,
+  body,
+  #app {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .app-shell {
+    display: block !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+  .app-sidebar,
+  .topbar,
+  .sidebar-scrim,
+  .prototype-sidebar,
+  .prototype-topbar {
+    display: none !important;
+  }
+  .page-workspace {
+    display: block !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .page-container {
+    width: 100% !important;
+    min-height: 100vh !important;
+    padding: 24px 28px 32px !important;
+    overflow: visible !important;
+  }
+  .prototype-app {
+    display: block !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+  .prototype-workspace {
+    display: block !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .prototype-main {
+    width: 100% !important;
+    min-height: 100vh !important;
+    padding: 24px 28px 32px !important;
+    overflow: visible !important;
+  }
+</style>`;
+
+export function applyContentOnlyMode(source) {
+  if (!isPlatformExportHtml(source) || /id=["']platform-html-content-only["']/i.test(source)) return source;
+  if (/<\/head>/i.test(source)) return source.replace(/<\/head>/i, `${CONTENT_ONLY_STYLE}</head>`);
+  return `${CONTENT_ONLY_STYLE}${source}`;
 }
 
 export function htmlPrototypePlugin({ projectsRoot }) {
@@ -352,22 +479,28 @@ export function htmlPrototypePlugin({ projectsRoot }) {
         .forEach((source) => server.watcher.add(source.root));
       server.watcher.on('all', (_eventName, changedPath) => {
         const absolutePath = path.resolve(changedPath);
-        const isProjectChange = absolutePath === root || isInsideRoot(root, absolutePath);
+        const relativePath = toWebPath(path.relative(root, absolutePath));
+        const isProjectConfigChange =
+          absolutePath === root || /^([a-z][a-z0-9-]*)\/project\.json$/i.test(relativePath);
         const isPrototypeChange = Object.values(scanState.roots)
           .flat()
-          .some(
-          (source) => absolutePath === source.root || isInsideRoot(source.root, absolutePath),
-        );
-        if (!isProjectChange && !isPrototypeChange) return;
+          .some((source) => absolutePath === source.root || isInsideRoot(source.root, absolutePath));
+        if (!isProjectConfigChange && !isPrototypeChange) return;
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(async () => {
-          await refreshState();
-          Object.values(scanState.roots)
-            .flat()
-            .forEach((source) => server.watcher.add(source.root));
-          const virtualModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_MODULE_ID);
-          if (virtualModule) server.moduleGraph.invalidateModule(virtualModule);
-          server.ws.send({ type: 'full-reload' });
+          try {
+            await refreshState();
+            Object.values(scanState.roots)
+              .flat()
+              .forEach((source) => server.watcher.add(source.root));
+            const virtualModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_MODULE_ID);
+            if (virtualModule && (isProjectConfigChange || isPrototypeChange)) {
+              server.moduleGraph.invalidateModule(virtualModule);
+            }
+            if (isPrototypeChange) server.ws.send({ type: 'full-reload' });
+          } catch (error) {
+            server.config.logger.error(`[html-prototype] 原型目录刷新失败：${error.message}`);
+          }
         }, 120);
       });
 
@@ -376,9 +509,9 @@ export function htmlPrototypePlugin({ projectsRoot }) {
         const prefix = '/__projects/html-content/';
         if (!requestUrl.pathname.startsWith(prefix)) return next();
         const pathParts = requestUrl.pathname.slice(prefix.length).split('/').filter(Boolean);
-        const projectId = decodeURIComponent(pathParts.shift() || '');
-        const clientId = decodeURIComponent(pathParts.shift() || '_');
-        const relativePath = pathParts.map((part) => decodeURIComponent(part)).join('/');
+        const projectId = decodePathSegment(pathParts.shift() || '');
+        const clientId = decodePathSegment(pathParts.shift() || '_');
+        const relativePath = pathParts.map(decodePathSegment).join('/');
         const prototypeSource = (scanState.roots[projectId] || []).find(
           (source) => (source.clientId || '_') === clientId,
         );
@@ -390,7 +523,10 @@ export function htmlPrototypePlugin({ projectsRoot }) {
           return;
         }
         try {
-          const content = await fs.readFile(target);
+          const isHtml = /\.html?$/i.test(target);
+          const content = isHtml
+            ? Buffer.from(applyContentOnlyMode(await fs.readFile(target, 'utf8')), 'utf8')
+            : await fs.readFile(target);
           res.statusCode = 200;
           res.setHeader('Content-Type', mimeTypeFor(target));
           res.setHeader('Cache-Control', 'no-store');
@@ -411,10 +547,14 @@ export function htmlPrototypePlugin({ projectsRoot }) {
           for (const absolutePath of await walkFiles(prototypeSource.root)) {
             const relativePath = toWebPath(path.relative(prototypeSource.root, absolutePath));
             const clientPrefix = prototypeSource.clientId ? `${prototypeSource.clientId}/` : '';
+            const source = await fs.readFile(absolutePath);
+            const output = /\.html?$/i.test(absolutePath)
+              ? Buffer.from(applyContentOnlyMode(source.toString('utf8')), 'utf8')
+              : source;
             this.emitFile({
               type: 'asset',
               fileName: `projects/${projectId}/prototype/${clientPrefix}${relativePath}`,
-              source: await fs.readFile(absolutePath),
+              source: output,
             });
           }
         }

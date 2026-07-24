@@ -153,7 +153,10 @@ export function createProjectPageRoutes(project, client) {
       projectId: project.id,
       clientId: client.id,
       ...(page.view ? { source: `views/${String(page.view).replace(/^\/+/, '')}` } : {}),
-      ...(isHtmlPrototypePage(page) ? { sourceType: 'html-direct', htmlSource: page.source } : {}),
+      ...(isHtmlPrototypePage(page)
+        ? { sourceType: 'html-direct', htmlSource: page.source, htmlPrototype: true }
+        : {}),
+      ...(page.source === 'route-manager' ? { sourceType: 'route-manager', routeManagerPage: true } : {}),
       ...(project.pagePrdLinks?.[client.id]?.[page.name]
         ? { prd: project.pagePrdLinks[client.id][page.name] }
         : {}),

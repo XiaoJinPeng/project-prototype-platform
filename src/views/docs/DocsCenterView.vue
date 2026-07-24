@@ -118,7 +118,7 @@
       </main>
 
       <nav
-        v-if="!embedded && (headings.length || associatedPages.length)"
+        v-if="(!embedded || outlineVisible) && (headings.length || associatedPages.length)"
         class="docs-outline"
         :aria-label="t('docs.outline')"
       >
@@ -272,6 +272,8 @@ let documentSearchMarks = [];
 const embeddedDocumentAnchor = ref(props.documentAnchor);
 let activeRenderId = 0;
 let stopDocumentsChanged = () => {};
+let anchorHighlightFrame = 0;
+let anchorHighlightTimer = 0;
 let mermaidApi;
 
 function sortTree(nodes) {
@@ -585,8 +587,12 @@ function scrollToDocumentAnchor(anchor) {
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   activeHeadingId.value = target.id;
   target.classList.remove('is-prd-anchor-target');
-  window.requestAnimationFrame(() => target.classList.add('is-prd-anchor-target'));
-  window.setTimeout(() => target.classList.remove('is-prd-anchor-target'), 1800);
+  window.cancelAnimationFrame(anchorHighlightFrame);
+  window.clearTimeout(anchorHighlightTimer);
+  anchorHighlightFrame = window.requestAnimationFrame(() => {
+    target.classList.add('is-prd-anchor-target');
+    anchorHighlightTimer = window.setTimeout(() => target.classList.remove('is-prd-anchor-target'), 1800);
+  });
   return true;
 }
 
@@ -686,6 +692,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopDocumentsChanged();
   activeRenderId += 1;
+  window.cancelAnimationFrame(anchorHighlightFrame);
+  window.clearTimeout(anchorHighlightTimer);
 });
 </script>
 
@@ -706,8 +714,7 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 8% 0, rgb(var(--app-color-primary-rgb) / 7%), transparent 28rem),
     var(--docs-page-bg);
   color: var(--docs-ink);
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  font-family: var(--app-font-family-sans);
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
 }
@@ -838,7 +845,7 @@ onBeforeUnmount(() => {
 }
 .docs-page--embedded .docs-header,
 .docs-page--embedded .docs-directory,
-.docs-page--embedded .docs-outline {
+.docs-page--embedded:not(.docs-page--embedded-outline) .docs-outline {
   display: none;
 }
 .docs-page--embedded-outline .docs-outline {
@@ -1318,7 +1325,7 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   background: #f2f2f7;
   color: #9f2d42;
-  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-family: var(--app-font-family-mono);
   font-size: 0.9em;
 }
 :deep(.markdown-body pre) {

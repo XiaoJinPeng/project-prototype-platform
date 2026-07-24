@@ -270,8 +270,9 @@ function toPublicManifest(manifest) {
   };
 }
 
-export async function scanProjectPackages(projectsRoot) {
+export async function scanProjectPackages(projectsRoot, { cache } = {}) {
   const root = path.resolve(projectsRoot);
+  if (cache?.has(root)) return cache.get(root);
   const projects = [];
   const invalidProjects = [];
   const entries = await fs.readdir(root, { withFileTypes: true }).catch((error) => {
@@ -313,7 +314,9 @@ export async function scanProjectPackages(projectsRoot) {
     }
   }
 
-  return { generatedAt: new Date().toISOString(), projects, invalidProjects };
+  const result = { generatedAt: new Date().toISOString(), projects, invalidProjects };
+  cache?.set(root, result);
+  return result;
 }
 
 async function walkPublicFiles(projectRoot) {
@@ -551,7 +554,8 @@ function normalizeProjectInput(body, { editing = false, existingManifest = null 
     ...(existingManifest?.prototype || {}),
     ...(body.prototype || {}),
     enabled: Boolean(body.prototype?.enabled ?? existingManifest?.prototype?.enabled),
-    root: String(body.prototype?.root || existingManifest?.prototype?.root || 'prototype').trim() || 'prototype',
+    root:
+      String(body.prototype?.root || existingManifest?.prototype?.root || 'prototype').trim() || 'prototype',
     client: String(body.prototype?.client || existingManifest?.prototype?.client || '').trim(),
     section: String(body.prototype?.section || existingManifest?.prototype?.section || '').trim(),
     clients: body.prototype?.clients || existingManifest?.prototype?.clients || {},
@@ -739,23 +743,27 @@ async function updateProjectPackage(projectsRoot, input) {
     theme: mergeTheme(manifest.theme, input.primary, input.pageBackground),
     branding: { ...(manifest.branding || {}) },
   };
+  const assetsToRemove = new Set();
 
   if (input.logoDataUrl) {
     const logoPath = await writeProjectLogo(projectRoot, input.logoDataUrl);
     nextManifest.branding.logo = logoPath;
     if (!oldFavicon || oldFavicon === oldLogo) nextManifest.branding.favicon = logoPath;
-    if (oldLogo && oldLogo !== logoPath) await removeProjectAsset(projectRoot, oldLogo);
+    if (oldLogo && oldLogo !== logoPath) assetsToRemove.add(oldLogo);
     if (oldFavicon && oldFavicon !== oldLogo && oldFavicon !== logoPath) {
-      await removeProjectAsset(projectRoot, oldFavicon);
+      assetsToRemove.add(oldFavicon);
     }
   } else if (input.removeLogo && oldLogo) {
-    await removeProjectAsset(projectRoot, oldLogo);
     delete nextManifest.branding.logo;
     if (oldFavicon === oldLogo) delete nextManifest.branding.favicon;
+    assetsToRemove.add(oldLogo);
   }
 
   await ensureClientDefinitions(projectRoot, nextManifest);
   await writeManifest(projectRoot, nextManifest);
+  await Promise.allSettled(
+    [...assetsToRemove].map((resourcePath) => removeProjectAsset(projectRoot, resourcePath)),
+  );
   return nextManifest;
 }
 
@@ -763,6 +771,10 @@ export function projectPackagesPlugin({ projectsRoot }) {
   const root = path.resolve(projectsRoot);
   let isBuild = false;
   let refreshTimer;
+  const scanCache = new Map();
+
+  const loadScanResult = () => scanProjectPackages(root, { cache: scanCache });
+
   return {
     name: 'project-packages',
     configResolved(config) {
@@ -773,11 +785,21 @@ export function projectPackagesPlugin({ projectsRoot }) {
       server.watcher.on('all', (_eventName, changedPath) => {
         const absolutePath = path.resolve(changedPath);
         if (absolutePath !== root && !isInsideRoot(root, absolutePath)) return;
+        const relativePath = toWebPath(path.relative(root, absolutePath));
+        const projectEntryChange = absolutePath === root || /^[a-z][a-z0-9-]*$/i.test(relativePath);
+        const bindingChange = /^([a-z][a-z0-9-]*)\/\.platform\/prd-bindings\.json$/i.exec(relativePath);
+        const manifestChange =
+          /^([a-z][a-z0-9-]*)\/(?:project\.json|page-definitions\.js|\.platform\/page-prd-links\.json)$/i.test(
+            relativePath,
+          );
+        const viewChange = /^([a-z][a-z0-9-]*)\/views\/.+\.vue$/i.test(relativePath);
+        if (!projectEntryChange && !manifestChange && !viewChange && !bindingChange) return;
+        if (projectEntryChange || manifestChange || viewChange) scanCache.delete(root);
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(() => {
-          server.ws.send({ type: 'custom', event: 'project-packages:changed' });
-          const relativePath = toWebPath(path.relative(root, absolutePath));
-          const bindingChange = /^([a-z][a-z0-9-]*)\/\.platform\/prd-bindings\.json$/i.exec(relativePath);
+          if (projectEntryChange || manifestChange) {
+            server.ws.send({ type: 'custom', event: 'project-packages:changed' });
+          }
           if (bindingChange) {
             server.ws.send({
               type: 'custom',
@@ -785,11 +807,7 @@ export function projectPackagesPlugin({ projectsRoot }) {
               data: { projectId: bindingChange[1] },
             });
           }
-          if (
-            /project\.json$|page-definitions\.js$|[\\/]views[\\/].+\.vue$|[\\/]\.platform[\\/]page-prd-links\.json$/i.test(
-              absolutePath,
-            )
-          ) {
+          if (projectEntryChange || manifestChange || viewChange) {
             server.ws.send({ type: 'full-reload' });
           }
         }, 120);
@@ -896,6 +914,7 @@ export function projectPackagesPlugin({ projectsRoot }) {
             const manifest = requestUrl.pathname.endsWith('/create')
               ? await createProjectPackage(root, input)
               : await updateProjectPackage(root, input);
+            scanCache.delete(root);
             sendJson(res, {
               ok: true,
               project: toPublicManifest(manifest),
@@ -908,7 +927,7 @@ export function projectPackagesPlugin({ projectsRoot }) {
         }
         if (requestUrl.pathname === '/__projects/manifest') {
           try {
-            sendJson(res, await scanProjectPackages(root));
+            sendJson(res, await loadScanResult());
           } catch (error) {
             sendJson(res, { message: '项目包扫描失败', detail: error.message }, 500);
           }

@@ -11,7 +11,16 @@ const showProjectMenu = ref(false);
 const projectMenuRef = ref(null);
 const consoleVisibilityKey = 'project-platform:home-engineering-tools';
 const selectedProjectStorageKey = 'project-platform:home-selected-project';
-const showConsole = ref(window.sessionStorage.getItem(consoleVisibilityKey) === 'true');
+
+function readConsoleVisibility() {
+  try {
+    return window.sessionStorage.getItem(consoleVisibilityKey) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+const showConsole = ref(readConsoleVisibility());
 
 const selectableProjects = computed(() =>
   installedProjects.filter((project) => project.homepage?.visible !== false),
@@ -125,7 +134,11 @@ function chooseProject(projectId) {
 
 function toggleConsole() {
   showConsole.value = !showConsole.value;
-  window.sessionStorage.setItem(consoleVisibilityKey, String(showConsole.value));
+  try {
+    window.sessionStorage.setItem(consoleVisibilityKey, String(showConsole.value));
+  } catch {
+    // Session storage is optional; the current page state remains available in memory.
+  }
 }
 
 function handleConsoleShortcut(event) {
@@ -369,7 +382,9 @@ onBeforeUnmount(() => {
                 <div
                   class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-surface-container-low transition-colors group-hover:bg-theme-primary/10"
                 >
-                  <span class="material-symbols-outlined text-on-surface-variant group-hover:text-theme-primary">
+                  <span
+                    class="material-symbols-outlined text-on-surface-variant group-hover:text-theme-primary"
+                  >
                     {{ entry.icon }}
                   </span>
                 </div>

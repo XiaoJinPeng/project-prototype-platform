@@ -1,4 +1,6 @@
-const BASE_URL = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const BASE_URL = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
 const EMPTY_BINDINGS = { schemaVersion: 1, bindings: [] };
 
 function bindingsUrl(projectId) {
@@ -81,13 +83,16 @@ function createHeadingId(text, usedIds) {
 export function extractPrdHeadings(source) {
   const headings = [];
   const usedIds = new Set();
-  let inCodeBlock = false;
+  let codeFence = null;
   for (const line of String(source || '').split(/\r?\n/u)) {
-    if (/^\s*```/u.test(line)) {
-      inCodeBlock = !inCodeBlock;
+    const fenceMatch = /^\s*(`{3,}|~{3,})/u.exec(line);
+    if (fenceMatch) {
+      const marker = fenceMatch[1];
+      if (!codeFence) codeFence = { character: marker[0], length: marker.length };
+      else if (marker[0] === codeFence.character && marker.length >= codeFence.length) codeFence = null;
       continue;
     }
-    if (inCodeBlock) continue;
+    if (codeFence) continue;
     const match = /^(#{1,3})\s+(.+?)\s*#*\s*$/u.exec(line);
     if (!match) continue;
     const text = match[2].replace(/\[([^\]]+)\]\([^)]*\)/gu, '$1').trim();

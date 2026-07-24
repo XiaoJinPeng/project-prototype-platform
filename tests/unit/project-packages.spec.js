@@ -162,4 +162,38 @@ describe('project package scanner', () => {
     });
     expect(result.roots['sample-project'][0]).toMatchObject({ clientId: 'admin' });
   });
+
+  it('marks platform exports for content-only shell rendering', async () => {
+    const { projectsRoot, packageRoot } = await createProjectFixture();
+    const prototypeRoot = path.join(path.dirname(projectsRoot), 'export-html');
+    await fs.mkdir(prototypeRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(prototypeRoot, 'dashboard.html'),
+      '<script type="application/json" id="prototype-page-manifest">{"templateVersion":1,"exportFormat":"vue-sfc","pageKey":"export-dashboard","pageTitle":"导出仪表板","menuTitle":"导出仪表板菜单","menuSection":"workspace","menuIcon":"DataBoard","menu":false,"client":"admin","routePath":"/admin/export-dashboard"}</script><script type="text/plain" id="prototype-editable-template" data-source-format="vue-sfc-template"><main /></script>',
+      'utf8',
+    );
+    await fs.writeFile(
+      path.join(packageRoot, 'project.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'sample-project',
+        name: '示例项目',
+        pageDefinitions: 'page-definitions.js',
+        clients: [{ id: 'admin', name: '管理端', defaultPage: 'home' }],
+        prototype: { enabled: true, root: prototypeRoot },
+      }),
+      'utf8',
+    );
+
+    const result = await scanHtmlPrototypePages(projectsRoot);
+    expect(result.projects['sample-project'].admin[0]).toMatchObject({
+      path: 'export-dashboard',
+      title: '导出仪表板',
+      sourceType: 'html-direct',
+      renderMode: 'content-only',
+      section: 'workspace',
+      icon: 'DataBoard',
+      menu: false,
+    });
+  });
 });

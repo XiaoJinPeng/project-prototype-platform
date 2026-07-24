@@ -170,6 +170,7 @@ import { localeOptions, setLocale } from '../../i18n';
 import { getProject, getProjectClient } from '../../config/project-packages';
 import { getThemeColorRgb } from '../../config/theme';
 import { getProjectAssetUrl } from '../../services/project-assets';
+import { getClientDefaultPagePath } from '../../services/project-navigation';
 
 const props = defineProps({
   projectId: {
@@ -192,10 +193,13 @@ let loginTimer;
 
 const project = computed(() => getProject(props.projectId));
 const client = computed(() => getProjectClient(props.projectId, props.clientId));
+const defaultPagePath = computed(() => getClientDefaultPagePath(client.value));
 const clientConfig = computed(() => ({
   account: client.value?.login?.account || 'admin',
   tenantCode: client.value?.login?.tenantCode || 'demo',
-  destination: `/p/${props.projectId}/${props.clientId}/${client.value?.defaultPage || ''}`,
+  destination: defaultPagePath.value
+    ? `/p/${props.projectId}/${props.clientId}/${defaultPagePath.value}`
+    : `/p/${props.projectId}/${props.clientId}/login`,
   background: client.value?.login?.background
     ? getProjectAssetUrl(props.projectId, client.value.login.background)
     : '',

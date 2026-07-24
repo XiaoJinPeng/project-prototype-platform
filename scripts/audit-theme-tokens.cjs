@@ -4,6 +4,14 @@ const path = require('node:path');
 const roots = [path.join(process.cwd(), 'src'), path.join(process.cwd(), 'projects')];
 const allowedFile = path.normalize(path.join(process.cwd(), 'src', 'styles', 'tokens.css'));
 const extensions = new Set(['.vue', '.css', '.js']);
+const ignoredDirectories = new Set([
+  '.backups',
+  '.git',
+  '.page-transfer-work',
+  'dist',
+  'exports',
+  'node_modules',
+]);
 const forbidden = [
   { label: '工程主色十六进制硬编码', pattern: /#00689e/gi },
   { label: '工程主色 RGB 硬编码', pattern: /rgba?\(\s*0\s*(?:,|\s)\s*104\s*(?:,|\s)\s*158/gi },
@@ -15,7 +23,7 @@ function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name !== 'assets') walk(fullPath);
+      if (entry.name !== 'assets' && !ignoredDirectories.has(entry.name)) walk(fullPath);
       continue;
     }
     if (!extensions.has(path.extname(entry.name)) || path.normalize(fullPath) === allowedFile) continue;

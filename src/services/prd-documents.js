@@ -1,4 +1,6 @@
-const BASE_URL = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const BASE_URL = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
 
 function encodeDocumentPath(documentPath) {
   return documentPath.split('/').map(encodeURIComponent).join('/');
@@ -20,7 +22,9 @@ async function fetchOrThrow(url, responseType = 'json') {
 }
 
 export function normalizeDocumentPath(value) {
-  const segments = String(value || '').replaceAll('\\', '/').split('/');
+  const segments = String(value || '')
+    .replaceAll('\\', '/')
+    .split('/');
   const normalized = [];
   for (const segment of segments) {
     if (!segment || segment === '.') continue;
@@ -32,11 +36,15 @@ export function normalizeDocumentPath(value) {
 
 export function resolveDocumentReference(currentDocumentPath, reference) {
   const value = String(reference || '').trim();
-  if (!value || /^(?:[a-z]+:|#|\/\/)/i.test(value)) return value;
+  if (!value || /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(value)) return value;
 
-  const [pathPart, suffix = ''] = value.split(/(?=[?#])/u, 2);
+  const suffixIndex = value.search(/[?#]/u);
+  const pathPart = suffixIndex >= 0 ? value.slice(0, suffixIndex) : value;
+  const suffix = suffixIndex >= 0 ? value.slice(suffixIndex) : '';
   const currentFolder = currentDocumentPath.split('/').slice(0, -1).join('/');
-  const resolved = normalizeDocumentPath(pathPart.startsWith('/') ? pathPart : `${currentFolder}/${pathPart}`);
+  const resolved = normalizeDocumentPath(
+    pathPart.startsWith('/') ? pathPart : `${currentFolder}/${pathPart}`,
+  );
   return `${resolved}${suffix}`;
 }
 

@@ -1024,7 +1024,7 @@ function focusProjectList() {
     radial-gradient(at 0% 100%, hsl(240 100% 97%) 0, transparent 50%);
   background-attachment: fixed;
   background-size: cover;
-  font-family: Inter, 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(--app-font-family-sans);
 }
 .project-portal__sidebar {
   padding: 16px;

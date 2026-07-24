@@ -12,7 +12,23 @@ export const localeOptions = [
   { label: 'English', value: 'en-US' },
 ];
 
-const savedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+function readStoredLocale() {
+  try {
+    return window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeLocale(locale) {
+  try {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Local storage is optional; the selected locale remains active for the current page.
+  }
+}
+
+const savedLocale = readStoredLocale();
 const initialLocale = localeOptions.some((option) => option.value === savedLocale)
   ? savedLocale
   : DEFAULT_LOCALE;
@@ -30,12 +46,10 @@ export const i18n = createI18n({
 });
 
 export function setLocale(locale) {
-  const nextLocale = localeOptions.some((option) => option.value === locale)
-    ? locale
-    : DEFAULT_LOCALE;
+  const nextLocale = localeOptions.some((option) => option.value === locale) ? locale : DEFAULT_LOCALE;
   i18n.global.locale.value = nextLocale;
-  window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
-  document.documentElement.lang = nextLocale;
+  storeLocale(nextLocale);
+  if (typeof document !== 'undefined') document.documentElement.lang = nextLocale;
 }
 
 setLocale(initialLocale);

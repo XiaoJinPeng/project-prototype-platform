@@ -1,4 +1,7 @@
 /** @type {import('tailwindcss').Config} */
+const sansFont = ['var(--app-font-family-sans)'];
+const monoFont = ['var(--app-font-family-mono)'];
+
 export default {
   content: ['./index.html', './src/**/*.{vue,js}', './projects/**/*.{vue,js}'],
   corePlugins: {
@@ -81,15 +84,17 @@ export default {
         'margin-mobile': '16px',
       },
       fontFamily: {
-        'headline-lg-mobile': ['Inter', 'PingFang SC', 'Microsoft YaHei'],
-        'label-sm': ['Inter', 'PingFang SC', 'Microsoft YaHei'],
-        'headline-md': ['Inter', 'PingFang SC', 'Microsoft YaHei'],
-        display: ['Inter', 'PingFang SC', 'Microsoft YaHei'],
-        'headline-lg': ['Inter', 'PingFang SC', 'Microsoft YaHei'],
-        'body-sm': ['Inter', 'PingFang SC', 'Microsoft YaHei'],
-        'label-md': ['Inter', 'PingFang SC', 'Microsoft YaHei'],
-        title: ['Inter', 'PingFang SC', 'Microsoft YaHei'],
-        'body-lg': ['Inter', 'PingFang SC', 'Microsoft YaHei'],
+        sans: sansFont,
+        mono: monoFont,
+        'headline-lg-mobile': sansFont,
+        'label-sm': sansFont,
+        'headline-md': sansFont,
+        display: sansFont,
+        'headline-lg': sansFont,
+        'body-sm': sansFont,
+        'label-md': sansFont,
+        title: sansFont,
+        'body-lg': sansFont,
       },
       fontSize: {
         'headline-lg-mobile': ['28px', { lineHeight: '34px', letterSpacing: '-0.022em', fontWeight: '700' }],

@@ -14,7 +14,7 @@ const props = defineProps({
   layoutMode: { type: String, default: 'split' },
 });
 
-const emit = defineEmits(['close', 'open-window', 'update:layoutMode']);
+const emit = defineEmits(['close', 'open-window', 'ready', 'update:layoutMode']);
 const router = useRouter();
 const outlineVisible = ref(false);
 const activeDocumentPath = ref(props.documentPath);
@@ -176,6 +176,7 @@ onMounted(() => {
   readSavedPosition();
   updateViewportMode();
   window.addEventListener('resize', updateViewportMode);
+  emit('ready');
 });
 
 onBeforeUnmount(() => {
@@ -418,6 +419,8 @@ function moveSearchMatch(step) {
 <style scoped>
 .prd-review-pane {
   display: grid;
+  grid-column: 2;
+  grid-row: 1;
   height: 100%;
   min-width: 0;
   min-height: 0;
@@ -428,6 +431,12 @@ function moveSearchMatch(step) {
   border-left: 1px solid var(--border);
   background: #fff;
   box-shadow: -8px 0 24px rgb(16 24 40 / 6%);
+  translate: 0 0;
+}
+
+.prd-review-pane--split {
+  width: 100%;
+  flex: none;
 }
 
 .prd-review-pane--overlay {

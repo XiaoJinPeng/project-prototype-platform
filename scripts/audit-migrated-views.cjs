@@ -7,7 +7,6 @@ const { parse, compileScript, compileTemplate } = require('@vue/compiler-sfc');
 const projectRoot = path.resolve(__dirname, '..');
 const projectsRoot = path.join(projectRoot, 'projects');
 const commonViewRoots = [path.join(projectRoot, 'src', 'views', 'auth')];
-const prototypeRoot = path.resolve(projectRoot, '..', '02_原型和PRD', '原型');
 
 const rules = [
   ['旧侧栏', /<aside\b/i],
@@ -34,25 +33,48 @@ const expectedDrawerCounts = new Map([['MarketingView.vue', 1]]);
 
 const structuralTags = ['el-dialog', 'el-drawer', 'el-table', 'el-tabs', 'el-form'];
 
-function toPrototypeFileName(file) {
-  const baseName = path.basename(file, '.vue').replace(/View$/, '');
-  if (baseName === 'EnterpriseDashboard') return 'dashboard.html';
-  return `${baseName.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()}.html`;
-}
-
 function countOpeningTags(source, tagName) {
   return [...source.matchAll(new RegExp(`<${tagName}\\b`, 'gi'))].length;
 }
 
+function resolveConfiguredRoot(packageRoot, configuredRoot) {
+  const value = String(configuredRoot || '').trim();
+  if (!value) return '';
+  return path.isAbsolute(value) ? path.normalize(value) : path.resolve(packageRoot, value);
+}
+
+function prototypeCandidates(project, client, sourceFile) {
+  const prototype = project.manifest.prototype || {};
+  const configuredClients = prototype.clients;
+  const clientEntries = Array.isArray(configuredClients)
+    ? configuredClients.map((item) => [item?.clientId || item?.id, item])
+    : configuredClients && typeof configuredClients === 'object'
+      ? Object.entries(configuredClients)
+      : [];
+  const configuredSources = clientEntries.length
+    ? clientEntries
+        .filter(([clientId, config]) => clientId === client.id && config?.enabled !== false)
+        .map(([, config]) => config)
+    : prototype.enabled && prototype.root
+      ? [prototype]
+      : [];
+  const roots = configuredSources
+    .map((config) => resolveConfiguredRoot(project.packageRoot, config?.root))
+    .filter(Boolean);
+  const clientFolders = [client.id, client.name, client.shortName].filter(Boolean);
+  return [
+    ...roots.map((root) => path.resolve(root, sourceFile)),
+    ...roots.flatMap((root) => clientFolders.map((folder) => path.resolve(root, folder, sourceFile))),
+  ].filter((candidate, index, candidates) => candidates.indexOf(candidate) === index);
+}
+
 function listVueFiles(root) {
   if (!fs.existsSync(root)) return [];
-  return fs
-    .readdirSync(root, { withFileTypes: true })
-    .flatMap((entry) => {
-      const target = path.join(root, entry.name);
-      if (entry.isDirectory()) return listVueFiles(target);
-      return entry.isFile() && entry.name.endsWith('.vue') ? [target] : [];
-    });
+  return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) return listVueFiles(target);
+    return entry.isFile() && entry.name.endsWith('.vue') ? [target] : [];
+  });
 }
 
 function getPropertyName(property) {
@@ -68,7 +90,9 @@ function getObjectKeys(objectExpression) {
 }
 
 function isFunctionNode(node) {
-  return ['FunctionExpression', 'FunctionDeclaration', 'ArrowFunctionExpression', 'ObjectMethod'].includes(node?.type);
+  return ['FunctionExpression', 'FunctionDeclaration', 'ArrowFunctionExpression', 'ObjectMethod'].includes(
+    node?.type,
+  );
 }
 
 function collectReturnedObjectKeys(functionNode, functionMap = new Map(), visited = new Set()) {
@@ -127,16 +151,16 @@ function collectOptionsApiBindings(scriptSource) {
 
   const bindings = new Set();
   const optionMap = new Map(
-    options.properties
-      .map((property) => [getPropertyName(property), property])
-      .filter(([name]) => name),
+    options.properties.map((property) => [getPropertyName(property), property]).filter(([name]) => name),
   );
 
   const dataFunction = getOptionFunction(optionMap.get('data'), functionMap);
-  if (dataFunction) collectReturnedObjectKeys(dataFunction, functionMap).forEach((name) => bindings.add(name));
+  if (dataFunction)
+    collectReturnedObjectKeys(dataFunction, functionMap).forEach((name) => bindings.add(name));
 
   const setupFunction = getOptionFunction(optionMap.get('setup'), functionMap);
-  if (setupFunction) collectReturnedObjectKeys(setupFunction, functionMap).forEach((name) => bindings.add(name));
+  if (setupFunction)
+    collectReturnedObjectKeys(setupFunction, functionMap).forEach((name) => bindings.add(name));
 
   for (const optionName of ['computed', 'methods']) {
     const property = optionMap.get(optionName);
@@ -207,7 +231,7 @@ async function main() {
           if (page.prototype?.sourceFile) {
             prototypeSourceFiles.set(
               path.relative(projectRoot, viewFile).replaceAll('\\', '/'),
-              page.prototype.sourceFile,
+              prototypeCandidates(project, client, page.prototype.sourceFile),
             );
           }
         }
@@ -222,56 +246,44 @@ async function main() {
   const problems = [];
 
   for (const file of files) {
-  const source = fs.readFileSync(file, 'utf8');
-  const relativeFile = path.relative(projectRoot, file).replaceAll('\\', '/');
-  const parsed = parse(source, {
-    filename: relativeFile,
-    compilerOptions: { prefixIdentifiers: true },
-  });
-  const errors = parsed.errors.map((error) => String(error.message || error));
-  let bindings = {};
-  let templateCode = '';
-
-  if (!errors.length && parsed.descriptor.scriptSetup) {
-    try {
-      bindings = compileScript(parsed.descriptor, { id: relativeFile }).bindings;
-    } catch (error) {
-      errors.push(`script 编译失败：${error.message}`);
-    }
-  }
-
-  if (!errors.length && parsed.descriptor.template) {
-    const result = compileTemplate({
-      id: relativeFile,
+    const source = fs.readFileSync(file, 'utf8');
+    const relativeFile = path.relative(projectRoot, file).replaceAll('\\', '/');
+    const parsed = parse(source, {
       filename: relativeFile,
-      source: parsed.descriptor.template.content,
-      compilerOptions: {
-        prefixIdentifiers: true,
-        bindingMetadata: bindings,
-      },
+      compilerOptions: { prefixIdentifiers: true },
     });
-    errors.push(...result.errors.map((error) => String(error.message || error)));
-    templateCode = result.code;
-  }
+    const errors = parsed.errors.map((error) => String(error.message || error));
+    let bindings = {};
+    let templateCode = '';
 
-  const violations = rules
-    .filter(([, expression]) => expression.test(source))
-    .map(([label]) => label);
-
-  const clientFolder = file.includes(`${path.sep}operation${path.sep}`)
-    ? '营运端'
-    : file.includes(`${path.sep}enterprise${path.sep}`)
-      ? '企业端'
-      : null;
-  if (clientFolder) {
-    const mappedPrototypeName = prototypeSourceFiles.get(relativeFile);
-    const prototypeName = mappedPrototypeName || toPrototypeFileName(file);
-    const prototypeFile = path.join(prototypeRoot, clientFolder, prototypeName);
-    if (!fs.existsSync(prototypeFile)) {
-      if (!mappedPrototypeName) {
-        violations.push(`找不到对应 HTML 原型：${path.relative(projectRoot, prototypeFile).replaceAll('\\', '/')}`);
+    if (!errors.length && parsed.descriptor.scriptSetup) {
+      try {
+        bindings = compileScript(parsed.descriptor, { id: relativeFile }).bindings;
+      } catch (error) {
+        errors.push(`script 编译失败：${error.message}`);
       }
-    } else {
+    }
+
+    if (!errors.length && parsed.descriptor.template) {
+      const result = compileTemplate({
+        id: relativeFile,
+        filename: relativeFile,
+        source: parsed.descriptor.template.content,
+        compilerOptions: {
+          prefixIdentifiers: true,
+          bindingMetadata: bindings,
+        },
+      });
+      errors.push(...result.errors.map((error) => String(error.message || error)));
+      templateCode = result.code;
+    }
+
+    const violations = rules.filter(([, expression]) => expression.test(source)).map(([label]) => label);
+
+    const prototypeFile = prototypeSourceFiles
+      .get(relativeFile)
+      ?.find((candidate) => fs.existsSync(candidate));
+    if (prototypeFile) {
       const prototypeSource = fs.readFileSync(prototypeFile, 'utf8');
       for (const tagName of structuralTags) {
         const prototypeCount = countOpeningTags(prototypeSource, tagName);
@@ -281,57 +293,56 @@ async function main() {
         }
       }
     }
-  }
-  const expectedDialogCount = expectedDialogCounts.get(path.basename(file));
-  if (expectedDialogCount !== undefined) {
-    const actualDialogCount = [...source.matchAll(/<el-dialog\b/gi)].length;
-    if (actualDialogCount !== expectedDialogCount) {
-      violations.push(`弹窗数量异常：应为 ${expectedDialogCount}，实际为 ${actualDialogCount}`);
+    const expectedDialogCount = expectedDialogCounts.get(path.basename(file));
+    if (expectedDialogCount !== undefined) {
+      const actualDialogCount = [...source.matchAll(/<el-dialog\b/gi)].length;
+      if (actualDialogCount !== expectedDialogCount) {
+        violations.push(`弹窗数量异常：应为 ${expectedDialogCount}，实际为 ${actualDialogCount}`);
+      }
     }
-  }
-  const expectedDrawerCount = expectedDrawerCounts.get(path.basename(file));
-  if (expectedDrawerCount !== undefined) {
-    const actualDrawerCount = [...source.matchAll(/<el-drawer\b/gi)].length;
-    if (actualDrawerCount !== expectedDrawerCount) {
-      violations.push(`抽屉数量异常：应为 ${expectedDrawerCount}，实际为 ${actualDrawerCount}`);
+    const expectedDrawerCount = expectedDrawerCounts.get(path.basename(file));
+    if (expectedDrawerCount !== undefined) {
+      const actualDrawerCount = [...source.matchAll(/<el-drawer\b/gi)].length;
+      if (actualDrawerCount !== expectedDrawerCount) {
+        violations.push(`抽屉数量异常：应为 ${expectedDrawerCount}，实际为 ${actualDrawerCount}`);
+      }
     }
-  }
 
-  if (parsed.descriptor.scriptSetup && templateCode) {
-    const allowedGlobals = new Set(['$attrs', '$emit', '$router', '$route', '$slots']);
-    const unresolvedBindings = [
-      ...new Set(
-        [...templateCode.matchAll(/_ctx\.([A-Za-z_$][\w$]*)/g)]
-          .map((match) => match[1])
-          .filter((name) => !allowedGlobals.has(name)),
-      ),
-    ];
-    if (unresolvedBindings.length) {
-      violations.push(`模板未定义绑定：${unresolvedBindings.join(', ')}`);
-    }
-  }
-
-  if (parsed.descriptor.script && !parsed.descriptor.scriptSetup && templateCode) {
-    try {
-      const publicBindings = collectOptionsApiBindings(parsed.descriptor.script.content);
+    if (parsed.descriptor.scriptSetup && templateCode) {
+      const allowedGlobals = new Set(['$attrs', '$emit', '$router', '$route', '$slots']);
       const unresolvedBindings = [
         ...new Set(
           [...templateCode.matchAll(/_ctx\.([A-Za-z_$][\w$]*)/g)]
             .map((match) => match[1])
-            .filter((name) => !name.startsWith('$') && !publicBindings.has(name)),
+            .filter((name) => !allowedGlobals.has(name)),
         ),
       ];
       if (unresolvedBindings.length) {
-        violations.push(`Options API 未暴露模板绑定：${unresolvedBindings.join(', ')}`);
+        violations.push(`模板未定义绑定：${unresolvedBindings.join(', ')}`);
       }
-    } catch (error) {
-      errors.push(`Options API 静态分析失败：${error.message}`);
     }
-  }
 
-  if (errors.length || violations.length) {
-    problems.push({ file: relativeFile, errors, violations });
-  }
+    if (parsed.descriptor.script && !parsed.descriptor.scriptSetup && templateCode) {
+      try {
+        const publicBindings = collectOptionsApiBindings(parsed.descriptor.script.content);
+        const unresolvedBindings = [
+          ...new Set(
+            [...templateCode.matchAll(/_ctx\.([A-Za-z_$][\w$]*)/g)]
+              .map((match) => match[1])
+              .filter((name) => !name.startsWith('$') && !publicBindings.has(name)),
+          ),
+        ];
+        if (unresolvedBindings.length) {
+          violations.push(`Options API 未暴露模板绑定：${unresolvedBindings.join(', ')}`);
+        }
+      } catch (error) {
+        errors.push(`Options API 静态分析失败：${error.message}`);
+      }
+    }
+
+    if (errors.length || violations.length) {
+      problems.push({ file: relativeFile, errors, violations });
+    }
   }
 
   const routerSource = fs.readFileSync(path.join(projectRoot, 'src', 'router', 'index.js'), 'utf8');
@@ -340,7 +351,10 @@ async function main() {
     ...new Set(menuPaths.filter((pathValue, index) => menuPaths.indexOf(pathValue) !== index)),
   ];
   if (duplicateMenuPaths.length) routeProblems.push('重复菜单路径：' + duplicateMenuPaths.join(', '));
-  if (!routerSource.includes('createInstalledProjectRoutes') || !routerSource.includes('createProjectPageRoutes')) {
+  if (
+    !routerSource.includes('createInstalledProjectRoutes') ||
+    !routerSource.includes('createProjectPageRoutes')
+  ) {
     routeProblems.push('Router 未使用项目包页面定义生成动态路由');
   }
   if (/PlaceholderView/.test(routerSource)) routeProblems.push('Router 仍引用 PlaceholderView');

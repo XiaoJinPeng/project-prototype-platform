@@ -16,7 +16,11 @@
         <div class="project-dialog-heading__copy">
           <span class="project-dialog-heading__eyebrow">PROJECT CONFIGURATION</span>
           <strong>{{ dialogTitle }}</strong>
-          <span>{{ dialogMode === 'create' ? '从基础资料开始建立一个新的项目包。' : '调整当前项目的入口、品牌和工程能力。' }}</span>
+          <span>{{
+            dialogMode === 'create'
+              ? '从基础资料开始建立一个新的项目包。'
+              : '调整当前项目的入口、品牌和工程能力。'
+          }}</span>
         </div>
       </div>
     </template>
@@ -149,7 +153,12 @@
                   <el-input v-model="client.entryIcon" placeholder="例如：Van、OfficeBuilding" />
                 </el-form-item>
                 <el-form-item label="入口顺序">
-                  <el-input-number v-model="client.entryOrder" :min="1" :max="999" controls-position="right" />
+                  <el-input-number
+                    v-model="client.entryOrder"
+                    :min="1"
+                    :max="999"
+                    controls-position="right"
+                  />
                 </el-form-item>
                 <el-form-item label="默认页面">
                   <el-input v-model="client.defaultPage" placeholder="例如：dashboard" />
@@ -212,7 +221,7 @@
                 <el-form-item v-if="entry.kind === 'docs'" label="PRD目录" class="client-config-grid__wide">
                   <el-input
                     v-model="form.docsRoot"
-                    placeholder="支持项目内相对路径或本机绝对路径，例如：D:\\RIMO资料\\PRD"
+                    placeholder="支持项目内相对路径或本机绝对路径，例如：D:\\项目资料\\PRD"
                   />
                   <div class="form-help">
                     可直接指向工程外部的 PRD 文件夹；开发环境会实时读取，生产构建时会生成对应的文档快照。
@@ -253,7 +262,7 @@
                   <el-form-item label="HTML 原型目录" class="client-config-grid__wide">
                     <el-input
                       v-model="form.prototype.clients[client.id].root"
-                      placeholder="支持项目内相对路径或本机绝对路径，例如：D:\\RIMO原型\\admin"
+                      placeholder="支持项目内相对路径或本机绝对路径，例如：D:\\项目原型\\admin"
                       :disabled="!form.prototype.enabled || !form.prototype.clients[client.id].enabled"
                     />
                     <div class="form-help">
@@ -272,7 +281,8 @@
             </div>
             <el-empty v-else description="请先登记至少一个客户端" />
             <div class="form-help prototype-source-card__help">
-              每个客户端可以指向不同的 HTML 文件夹；保存后开发环境会重新扫描，生产环境构建时会复制这些文件及其相对资源。
+              每个客户端可以指向不同的 HTML
+              文件夹；保存后开发环境会重新扫描，生产环境构建时会复制这些文件及其相对资源。
             </div>
           </section>
 
@@ -407,13 +417,14 @@ function createPrototypeClientMap(clients, prototype = {}) {
       const configured = Array.isArray(configuredClients)
         ? configuredClients.find((item) => (item?.clientId || item?.id) === client.id)
         : configuredClients[client.id];
-      const legacyConfig = client.id === legacyClient
-        ? {
-            enabled: Boolean(prototype.enabled),
-            root: prototype.root || 'prototype',
-            section: prototype.section || '',
-          }
-        : {};
+      const legacyConfig =
+        client.id === legacyClient
+          ? {
+              enabled: Boolean(prototype.enabled),
+              root: prototype.root || 'prototype',
+              section: prototype.section || '',
+            }
+          : {};
       return [client.id, createPrototypeClientDraft(configured || legacyConfig)];
     }),
   );
@@ -443,7 +454,13 @@ function resetForm() {
     homepageVisible: true,
     clients: [
       createClientDraft(
-        { id: 'admin', name: '管理端', description: '项目管理后台。', icon: 'Management', defaultPage: 'home' },
+        {
+          id: 'admin',
+          name: '管理端',
+          description: '项目管理后台。',
+          icon: 'Management',
+          defaultPage: 'home',
+        },
         { name: '管理端', description: '进入项目管理后台。', icon: 'Management', order: 10 },
       ),
     ],
@@ -475,7 +492,10 @@ function hydrateProject(project) {
   if (!project) return;
   const entries = project.entries || [];
   const projectClients = (project.clients || []).map((client) =>
-    createClientDraft(client, entries.find((entry) => entry.kind === 'client' && entry.clientId === client.id)),
+    createClientDraft(
+      client,
+      entries.find((entry) => entry.kind === 'client' && entry.clientId === client.id),
+    ),
   );
   Object.assign(form, {
     id: project.id,
@@ -489,7 +509,10 @@ function hydrateProject(project) {
     homepageVisible: project.homepage?.visible !== false,
     clients: projectClients,
     resourceEntries: ['docs', 'mobile'].map((kind) =>
-      createResourceEntryDraft(kind, entries.find((entry) => entry.kind === kind)),
+      createResourceEntryDraft(
+        kind,
+        entries.find((entry) => entry.kind === kind),
+      ),
     ),
     docsRoot: project.docs?.root || 'docs',
     prototype: {
@@ -1008,7 +1031,11 @@ async function submitForm() {
 
 .project-dialog-heading__icon .material-symbols-outlined {
   font-size: 22px;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 500,
+    'GRAD' 0,
+    'opsz' 24;
 }
 
 .project-dialog-heading__copy {
@@ -1081,7 +1108,9 @@ async function submitForm() {
 :global(.project-dialog .project-config-tabs .el-tabs__item.is-left.is-active) {
   color: var(--app-color-primary);
   background: #fff;
-  box-shadow: 0 5px 16px rgb(15 23 42 / 7%), 0 0 0 1px rgb(0 0 0 / 4%);
+  box-shadow:
+    0 5px 16px rgb(15 23 42 / 7%),
+    0 0 0 1px rgb(0 0 0 / 4%);
   transform: translateX(2px);
 }
 

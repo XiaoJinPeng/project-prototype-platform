@@ -115,16 +115,23 @@ export function prdContentPlugin({ projectsRoot }) {
       server.watcher.add(root);
       documentRoots.forEach((docsRoot) => server.watcher.add(docsRoot));
       server.watcher.on('all', async (_eventName, changedPath) => {
-        const absolutePath = path.resolve(changedPath);
-        if (absolutePath === root || isInsideRoot(root, absolutePath)) {
-          documentRoots = await loadProjectDocumentRoots(root);
-          documentRoots.forEach((docsRoot) => server.watcher.add(docsRoot));
-        }
-        for (const [projectId, docsRoot] of documentRoots) {
-          if (isInsideRoot(docsRoot, absolutePath)) {
-            server.ws.send({ type: 'custom', event: 'prd-docs:changed', data: { projectId } });
-            break;
+        try {
+          const absolutePath = path.resolve(changedPath);
+          const relativePath = toWebPath(path.relative(root, absolutePath));
+          const isProjectConfigChange =
+            absolutePath === root || /^([a-z][a-z0-9-]*)\/project\.json$/i.test(relativePath);
+          if (isProjectConfigChange) {
+            documentRoots = await loadProjectDocumentRoots(root);
+            documentRoots.forEach((docsRoot) => server.watcher.add(docsRoot));
           }
+          for (const [projectId, docsRoot] of documentRoots) {
+            if (isInsideRoot(docsRoot, absolutePath)) {
+              server.ws.send({ type: 'custom', event: 'prd-docs:changed', data: { projectId } });
+              break;
+            }
+          }
+        } catch (error) {
+          server.config.logger.error(`[prd-content] 文档目录刷新失败：${error.message}`);
         }
       });
       server.middlewares.use(async (req, res, next) => {

@@ -17,14 +17,27 @@ const route = useRoute();
 const router = useRouter();
 
 const ENGINEERING_TOOLS_KEY = 'project-platform:home-engineering-tools';
-const showEngineeringTools = ref(window.sessionStorage.getItem(ENGINEERING_TOOLS_KEY) === 'true');
+
+function readEngineeringToolsVisibility() {
+  try {
+    return window.sessionStorage.getItem(ENGINEERING_TOOLS_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+const showEngineeringTools = ref(readEngineeringToolsVisibility());
 const selectableProjects = computed(() =>
   installedProjects.filter((project) => project.homepage?.visible !== false),
 );
 
 function toggleEngineeringTools() {
   showEngineeringTools.value = !showEngineeringTools.value;
-  window.sessionStorage.setItem(ENGINEERING_TOOLS_KEY, String(showEngineeringTools.value));
+  try {
+    window.sessionStorage.setItem(ENGINEERING_TOOLS_KEY, String(showEngineeringTools.value));
+  } catch {
+    // Session storage is optional; the current page state remains available in memory.
+  }
 }
 
 function handleEngineeringToolsShortcut(event) {

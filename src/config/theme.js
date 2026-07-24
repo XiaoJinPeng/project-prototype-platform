@@ -7,7 +7,7 @@ export function getThemeColor(name = 'primary') {
 
 export function getThemeColorRgb(alpha = 1, name = 'primary') {
   const channels = getThemeColor(name + '-rgb');
-  return 'rgb(' + channels + ' / ' + alpha + ')';
+  return `rgb(${channels || '37 99 235'} / ${alpha})`;
 }
 
 const PROJECT_THEME_VARIABLES = [
